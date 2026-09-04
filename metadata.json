@@ -1,0 +1,6 @@
+{
+  "name": "Bookly - Studio Créatif",
+  "description": "Studio de création de contenu automatisé, rédaction d'e-books et livres par IA, bibliothèque interactive et formations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

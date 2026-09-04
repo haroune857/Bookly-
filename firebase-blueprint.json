@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile data and plan status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "maxLength": 100 },
+        "bio": { "type": "string", "maxLength": 500 },
+        "avatarBg": { "type": "string", "maxLength": 100 },
+        "authProvider": { "type": "string", "enum": ["email", "google"] },
+        "isAdmin": { "type": "boolean" },
+        "plan": { "type": "string", "enum": ["basic", "pro", "premium", "free"] },
+        "planBilling": { "type": "string", "enum": ["monthly", "quarterly", "yearly"] },
+        "planRenewsAt": { "type": "string", "maxLength": 100 },
+        "lifetimeProjectsCreated": { "type": "number" },
+        "monthlyProjectsCreated": { "type": "number" },
+        "dailyChatbotCount": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "lastLoginAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Ebook projects created by users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 300 },
+        "category": { "type": "string", "maxLength": 100 },
+        "author": { "type": "string", "maxLength": 100 },
+        "coverGradient": { "type": "string", "maxLength": 200 },
+        "coverTemplateId": { "type": "string", "maxLength": 100 },
+        "coverFigure": { "type": "string", "maxLength": 100 },
+        "coverCustomImage": { "type": "string", "maxLength": 500000 },
+        "coverLayout": { "type": "string", "maxLength": 50 },
+        "coverAccentColor": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["draft", "in_progress", "ai_generating", "completed"] },
+        "progress": { "type": "number" },
+        "wordCount": { "type": "number" },
+        "readingTimeMinutes": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["id", "userId", "title", "status"]
+    },
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "Global administration settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "freeDailyPromptLimit": { "type": "number" },
+        "proDailyPromptLimit": { "type": "number" },
+        "premiumDailyPromptLimit": { "type": "number" },
+        "maxFreeProjects": { "type": "number" },
+        "maintenanceMode": { "type": "boolean" },
+        "announcementBanner": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Individual user profiles"
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "User generated ebook projects"
+    },
+    "/admin_config/{configId}": {
+      "schema": { "$ref": "#/entities/AdminConfig" },
+      "description": "Global platform configurations"
+    }
+  }
+}

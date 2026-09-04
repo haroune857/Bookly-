@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Site Logo Dynamic Animations */
+
+/* 1. Whole Logo Floating and Dynamic Gyroscopic Motion */
+@keyframes bookly-logo-sway {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-4px) rotate(-4deg) scale(1.04);
+  }
+  50% {
+    transform: translateY(-1px) rotate(2deg) scale(0.98);
+  }
+  75% {
+    transform: translateY(3px) rotate(4deg) scale(1.02);
+  }
+}
+
+/* 2. Central Spark/Star Continuous Rotating Motion */
+@keyframes bookly-star-twirl {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.18);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+/* 3. Orbiting Satellite Dot Motion */
+@keyframes bookly-satellite-orbit {
+  0% {
+    transform: rotate(0deg) translateX(9px) rotate(0deg);
+    opacity: 0.8;
+  }
+  50% {
+    transform: rotate(180deg) translateX(11px) rotate(-180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg) translateX(9px) rotate(-360deg);
+    opacity: 0.8;
+  }
+}
+
+/* 4. Book Capsule Breathing Motion */
+@keyframes bookly-capsule-glow {
+  0%, 100% {
+    opacity: 0.22;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.06);
+  }
+}
+
+/* 5. Ambient Thinking Conic Rotation */
+@keyframes bookly-conic-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 6. Light Shimmer Sweep */
+@keyframes bookly-light-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-bookly-sway {
+  animation: bookly-logo-sway 2.6s ease-in-out infinite;
+}
+
+.animate-bookly-star-spin {
+  transform-origin: 24px 22px;
+  animation: bookly-star-twirl 3.5s linear infinite;
+}
+
+.animate-bookly-satellite {
+  transform-origin: 24px 22px;
+  animation: bookly-satellite-orbit 2.8s linear infinite;
+}
+
+.animate-bookly-capsule {
+  transform-origin: 24px 22px;
+  animation: bookly-capsule-glow 2s ease-in-out infinite;
+}
+
+.animate-bookly-conic {
+  animation: bookly-conic-spin 2.2s linear infinite;
+}
+
+.animate-bookly-shimmer {
+  animation: bookly-light-shimmer 1.8s ease-in-out infinite;
+}
+
+/* Book Typesetting & Layout Styles */
+.book-h1 {
+  font-family: Georgia, 'Cinzel', serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #1e1b4b;
+  margin: 1.4rem 0 0.6rem 0;
+  line-height: 1.3;
+}
+:is(.dark .book-h1) {
+  color: #e0e7ff;
+}
+
+.book-h2 {
+  font-family: Georgia, 'Merriweather', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #334155;
+  margin: 1.2rem 0 0.5rem 0;
+  line-height: 1.35;
+}
+:is(.dark .book-h2) {
+  color: #cbd5e1;
+}
+
+.book-h3 {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4f46e5;
+  margin: 1rem 0 0.4rem 0;
+  letter-spacing: 0.02em;
+}
+:is(.dark .book-h3) {
+  color: #818cf8;
+}
+
+.book-h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0.8rem 0 0.3rem 0;
+}
+:is(.dark .book-h4) {
+  color: #f1f5f9;
+}
+
+.book-p {
+  margin: 0 0 0.9rem 0;
+  line-height: 1.75;
+  text-indent: 1.25rem;
+}
+.book-p:first-of-type {
+  text-indent: 0;
+}
+
+.book-underline {
+  text-decoration: underline;
+  text-decoration-color: #6366f1;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+.book-blockquote {
+  border-left: 3px solid #6366f1;
+  padding: 0.6rem 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #475569;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+:is(.dark .book-blockquote) {
+  color: #94a3b8;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.book-callout {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-left: 4px solid #6366f1;
+  padding: 0.8rem 1rem;
+  border-radius: 0.6rem;
+  margin: 1rem 0;
+  font-size: 0.88rem;
+}
+:is(.dark .book-callout) {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.book-callout-title {
+  color: #4338ca;
+  font-weight: 700;
+}
+:is(.dark .book-callout-title) {
+  color: #a5b4fc;
+}
+
+.book-ul {
+  list-style-type: disc;
+  margin: 0.8rem 0 1rem 1.4rem;
+}
+.book-ol {
+  list-style-type: decimal;
+  margin: 0.8rem 0 1rem 1.4rem;
+}
+.book-li, .book-oli {
+  margin-bottom: 0.35rem;
+  line-height: 1.6;
+}
+
+.book-separator {
+  text-align: center;
+  margin: 1.5rem 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  letter-spacing: 0.35em;
+}
+
