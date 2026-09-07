@@ -18,6 +18,70 @@ function cleanAiOutput(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
+/**
+ * Direct client-side AI caller (Google Gemini REST or Groq REST)
+ * Used as an ultra-resilient fallback if the backend API is unreachable or on serverless cold-start
+ */
+async function callClientDirectAi(prompt: string, systemPrompt?: string): Promise<{ text: string; source: 'gemini' | 'groq'; model: string } | null> {
+  const geminiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;
+  const groqKey = (import.meta as any).env?.VITE_GROQ_API_KEY || (import.meta as any).env?.GROQ_API_KEY;
+
+  if (geminiKey) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey.trim())}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `${systemPrompt ? systemPrompt + '\n\n' : ''}${prompt}` }] }]
+        })
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return { text: cleanAiOutput(text), source: 'gemini', model: 'gemini-2.0-flash' };
+        }
+      }
+    } catch {
+      // Continue to next fallback
+    }
+  }
+
+  if (groqKey) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey.trim()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) {
+          return { text: cleanAiOutput(text), source: 'groq', model: 'llama-3.3-70b-versatile' };
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  return null;
+}
+
 // 1. Chat & Conversational Brainstorming
 export async function generateBrainstormChat(
   history: ChatMessage[],
@@ -40,7 +104,8 @@ export async function generateBrainstormChat(
       })
     });
 
-    if (response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('application/json')) {
       const data = await response.json();
       if (data.success && data.text) {
         return {
@@ -51,7 +116,20 @@ export async function generateBrainstormChat(
       }
     }
   } catch (err) {
-    console.warn('Backend /api/ai/chat unreachable, using local editorial assistant:', err);
+    console.warn('Backend /api/ai/chat unreachable, testing client fallback:', err);
+  }
+
+  // Try direct client AI fallback if keys exist
+  const directAi = await callClientDirectAi(
+    newMessage,
+    `Tu es le mentor d'écriture et coach éditorial de Bookly Studio. Réponds en français avec style et conseils concrets. ${context ? `Contexte : ${context}` : ''}`
+  );
+  if (directAi) {
+    return {
+      text: directAi.text,
+      source: directAi.source,
+      model: directAi.model
+    };
   }
 
   // Safe client editorial fallback
@@ -90,7 +168,8 @@ export async function generateAiContent(options: {
       })
     });
 
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       if (data.success && data.text) {
         return {
@@ -101,7 +180,20 @@ export async function generateAiContent(options: {
       }
     }
   } catch (err) {
-    console.warn('Backend /api/ai/generate unreachable, using local editorial studio:', err);
+    console.warn('Backend /api/ai/generate unreachable, testing client fallback:', err);
+  }
+
+  // Try direct client AI fallback
+  const directAi = await callClientDirectAi(
+    `Génère du contenu de type "${type}" sur le sujet "${cleanTopic}". Audience: ${audience || 'Générale'}, Tonalité: ${tone || 'Inspirante'}. ${customInstructions || ''}`,
+    'Tu es un auteur et éditeur d\'exception chez Bookly Studio. Rédige en français soigné et percutant.'
+  );
+  if (directAi) {
+    return {
+      text: directAi.text,
+      source: directAi.source,
+      model: directAi.model
+    };
   }
 
   // 2. Smart local template fallback
@@ -253,7 +345,8 @@ export async function generateFullBookWithAi(options: {
       })
     });
 
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       if (data.success && data.chapters && data.chapters.length > 0) {
         return { chapters: data.chapters, source: data.source || 'groq' };
@@ -337,7 +430,8 @@ export async function generateAiOutline(params: {
       })
     });
 
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       if (data.success && Array.isArray(data.outline) && data.outline.length > 0) {
         return data.outline;
@@ -384,7 +478,8 @@ export async function generateSingleChapterDraft(params: {
       body: JSON.stringify(params)
     });
 
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       if (data.success && data.content) {
         return {

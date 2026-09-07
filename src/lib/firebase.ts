@@ -95,19 +95,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection test at boot
-export async function testFirebaseConnection() {
+// Connection helper (opt-in only, no unsolicited boot ping)
+export async function testFirebaseConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('Firebase connection verified successfully.');
-  } catch (error: any) {
-    // App gracefully operates in local / offline mode
+    const snap = await getDoc(doc(db, 'test', 'connection'));
+    return snap.exists();
+  } catch {
+    return false;
   }
-}
-
-// Trigger initial connection test safely after runtime mounts
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    testFirebaseConnection().catch(() => {});
-  }, 1000);
 }

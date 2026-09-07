@@ -58,21 +58,19 @@ export const firestoreService = {
 
   // Save project
   async saveProject(project: Project, userId: string): Promise<void> {
-    const path = `projects/${project.id}`;
     try {
       await setDoc(doc(db, 'projects', project.id), {
         ...project,
         userId: userId,
         updatedAt: new Date().toISOString()
       }, { merge: true });
-    } catch (error) {
-      console.warn('Could not persist project to Firestore:', error);
+    } catch {
+      // Graceful offline fallback - LocalStorage handles persistence reliably
     }
   },
 
   // Fetch all user projects
   async getUserProjects(userId: string): Promise<Project[]> {
-    const path = 'projects';
     try {
       const q = query(collection(db, 'projects'), where('userId', '==', userId));
       const querySnapshot = await getDocs(q);
@@ -81,8 +79,8 @@ export const firestoreService = {
         projects.push(doc.data() as Project);
       });
       return projects;
-    } catch (error) {
-      console.warn('Could not fetch projects from Firestore:', error);
+    } catch {
+      // Graceful offline fallback
       return [];
     }
   },
@@ -91,8 +89,8 @@ export const firestoreService = {
   async deleteProject(projectId: string): Promise<void> {
     try {
       await deleteDoc(doc(db, 'projects', projectId));
-    } catch (error) {
-      console.warn('Could not delete project from Firestore:', error);
+    } catch {
+      // Graceful offline fallback
     }
   }
 };
