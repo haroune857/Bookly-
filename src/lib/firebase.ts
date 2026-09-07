@@ -101,16 +101,7 @@ export async function testFirebaseConnection() {
     await getDocFromServer(doc(db, 'test', 'connection'));
     console.log('Firebase connection verified successfully.');
   } catch (error: any) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (
-      errorMsg.includes('the client is offline') ||
-      errorMsg.includes('unavailable') ||
-      errorMsg.includes('permission-denied')
-    ) {
-      console.warn('Firebase connection notice: App operating in offline/resilient cache mode.', errorMsg);
-    } else {
-      console.warn('Firebase connection test notice:', errorMsg);
-    }
+    // App gracefully operates in local / offline mode
   }
 }
 

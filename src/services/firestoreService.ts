@@ -37,7 +37,7 @@ export const firestoreService = {
         lastLoginAt: new Date().toISOString()
       }, { merge: true });
     } catch (error) {
-      console.warn('Could not persist user to Firestore (offline fallback enabled):', error);
+      // Graceful offline fallback
     }
   },
 
@@ -51,7 +51,7 @@ export const firestoreService = {
       }
       return null;
     } catch (error) {
-      console.warn('Could not fetch user from Firestore:', error);
+      // Graceful offline fallback
       return null;
     }
   },

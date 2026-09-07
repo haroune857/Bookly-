@@ -11,6 +11,7 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { TrainingCourse } from '../types';
+import { RecommendedWorkshops } from './RecommendedWorkshops';
 
 interface FormationsViewProps {
   courses: TrainingCourse[];
@@ -66,8 +67,22 @@ export const FormationsView: React.FC<FormationsViewProps> = ({
         </div>
       </div>
 
-      {/* Categories Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* Recommended Workshops Section (Partenaires Certifiés) */}
+      <RecommendedWorkshops />
+
+      {/* Academy Courses Header & Categories */}
+      <div className="space-y-4 pt-4 border-t border-slate-200/80 dark:border-slate-800">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            Catalogue Bookly Academy
+          </h3>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            Modules certifiants
+          </span>
+        </div>
+
+        {/* Categories Filter */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         {categories.map((cat) => (
           <button
             key={cat.id}
@@ -81,6 +96,7 @@ export const FormationsView: React.FC<FormationsViewProps> = ({
             {cat.label}
           </button>
         ))}
+        </div>
       </div>
 
       {/* Training Courses Cards Grid */}

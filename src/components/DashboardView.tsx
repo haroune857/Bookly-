@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Project, ViewType } from '../types';
 import { EbookCoverThumbnail } from './EbookCoverThumbnail';
+import { RecommendedWorkshops } from './RecommendedWorkshops';
 
 interface DashboardViewProps {
   projects: Project[];
@@ -223,6 +224,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Recommended Workshops Section (Partenaires Certifiés) */}
+      <RecommendedWorkshops />
 
       {/* Actions Rapides Grid (Full Width, No Google Sync card) */}
       <div className="space-y-3">
