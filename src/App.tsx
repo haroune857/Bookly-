@@ -45,16 +45,13 @@ import { AdminDashboardView } from './components/AdminDashboardView';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { AuthModal } from './components/AuthModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
+import { LandingPageView } from './components/LandingPageView';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { firestoreService } from './services/firestoreService';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export default function App() {
-  // State from LocalStorage or Defaults
-  const [currentView, setCurrentView] = useState<ViewType>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
   // Check if initial authentication session exists
   const hasExistingSession = () => {
     try {
@@ -67,9 +64,16 @@ export default function App() {
     }
   };
 
+  // State from LocalStorage or Defaults: Landing page if no session, Dashboard if session exists
+  const [currentView, setCurrentView] = useState<ViewType>(() => {
+    return hasExistingSession() ? 'dashboard' : 'landing';
+  });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // Auth Wall & Modals
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => !hasExistingSession());
-  const [isAuthMandatory, setIsAuthMandatory] = useState<boolean>(() => !hasExistingSession());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isAuthMandatory, setIsAuthMandatory] = useState<boolean>(false);
+  const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'signup'>('login');
 
   // Subscription Modal State
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
@@ -195,6 +199,13 @@ export default function App() {
     }
     return INITIAL_USER;
   });
+
+  const isLoggedIn = Boolean(
+    user &&
+    user.email &&
+    user.email.trim().length > 0 &&
+    user.email !== 'client@bookly.studio'
+  );
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('bookly_settings');
@@ -467,9 +478,11 @@ export default function App() {
     localStorage.removeItem('bookly_admin_auth');
     localStorage.removeItem('bookly_user');
     setIsAdminUnlocked(false);
-    setIsAuthMandatory(true);
-    setIsAuthModalOpen(true);
-    showToast('Déconnexion réussie', 'Veuillez vous reconnecter pour accéder à votre studio.', 'info');
+    setUser(INITIAL_USER);
+    setCurrentView('landing');
+    setIsAuthMandatory(false);
+    setIsAuthModalOpen(false);
+    showToast('Déconnexion réussie', 'Vous êtes sur la vitrine publique Bookly. À bientôt !', 'info');
   };
 
   const handleOpenSubscriptionModal = (plan: 'pro' | 'premium' = 'pro') => {
@@ -651,8 +664,45 @@ export default function App() {
       {/* Toast System */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Top Header */}
-      <Header
+      {!isLoggedIn ? (
+        <div className="flex-1 w-full flex flex-col">
+          <LandingPageView
+            user={user}
+            darkMode={settings.darkMode}
+            onToggleDarkMode={() => setSettings((prev) => ({ ...prev, darkMode: !prev.darkMode }))}
+            onStartCreating={() => {
+              setAuthModalInitialMode('signup');
+              setIsAuthMandatory(false);
+              setIsAuthModalOpen(true);
+            }}
+            onOpenSamplePdf={() => {
+              const sample = libraryBooks[0] || projects[0];
+              if (sample) {
+                setReaderItem(sample);
+              }
+            }}
+            onOpenAuth={(mode = 'login') => {
+              setAuthModalInitialMode(mode);
+              setIsAuthMandatory(false);
+              setIsAuthModalOpen(true);
+            }}
+            onChoosePlan={(plan) => {
+              setTargetUpgradePlan(plan === 'free' ? 'pro' : plan);
+              setAuthModalInitialMode('signup');
+              setIsAuthMandatory(false);
+              setIsAuthModalOpen(true);
+            }}
+            onNavigateToDashboard={() => {
+              setAuthModalInitialMode('login');
+              setIsAuthMandatory(false);
+              setIsAuthModalOpen(true);
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Top Header */}
+          <Header
         currentView={currentView}
         onNavigate={(view) => {
           if (view === 'admin' && !isAdminUnlocked) {
@@ -700,6 +750,53 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-12">
+        {currentView === 'landing' && (
+          <LandingPageView
+            user={user}
+            onStartCreating={() => {
+              if (hasExistingSession()) {
+                setCurrentView('projects');
+                handleOpenNewProject();
+              } else {
+                setIsAuthMandatory(false);
+                setIsAuthModalOpen(true);
+              }
+            }}
+            onOpenSamplePdf={() => {
+              const sample = libraryBooks[0] || projects[0];
+              if (sample) {
+                setReaderItem(sample);
+              }
+            }}
+            onOpenAuth={() => {
+              setIsAuthMandatory(false);
+              setIsAuthModalOpen(true);
+            }}
+            onChoosePlan={(plan) => {
+              if (plan === 'free') {
+                if (hasExistingSession()) {
+                  setCurrentView('dashboard');
+                } else {
+                  setIsAuthMandatory(false);
+                  setIsAuthModalOpen(true);
+                }
+              } else {
+                setTargetUpgradePlan(plan);
+                if (hasExistingSession()) {
+                  setIsSubscriptionModalOpen(true);
+                } else {
+                  setIsAuthMandatory(false);
+                  setIsAuthModalOpen(true);
+                }
+              }
+            }}
+            onNavigateToDashboard={() => {
+              setCurrentView('dashboard');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
+
         {currentView === 'dashboard' && (
           <DashboardView
             projects={projects}
@@ -806,11 +903,14 @@ export default function App() {
           )
         )}
       </main>
+        </>
+      )}
 
       {/* Authentication Modal (Initial Wall & Account Switching) */}
       {isAuthModalOpen && (
         <AuthModal
           isOpen={isAuthModalOpen}
+          initialMode={authModalInitialMode}
           isMandatory={isAuthMandatory}
           onClose={() => {
             if (!isAuthMandatory) {
@@ -823,6 +923,7 @@ export default function App() {
             if (isAdmin || loggedInUser.isAdmin) {
               setIsAdminUnlocked(true);
             }
+            setCurrentView('dashboard');
             // Register / update in admin users list
             setAdminUsers((prev) => {
               const existingIdx = prev.findIndex(

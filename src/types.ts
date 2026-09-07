@@ -1,4 +1,4 @@
-export type ViewType = 'dashboard' | 'projects' | 'library' | 'formations' | 'settings' | 'admin';
+export type ViewType = 'landing' | 'dashboard' | 'projects' | 'library' | 'formations' | 'settings' | 'admin';
 
 export type ProjectStatus = 'draft' | 'in_progress' | 'ai_generating' | 'completed';
 

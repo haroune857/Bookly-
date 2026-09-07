@@ -36,6 +36,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Mode: 'login' | 'signup'
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setErrorMsg('');
+    }
+  }, [isOpen, initialMode]);
+
   // Form states
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -153,6 +160,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setErrorMsg('La fenêtre de connexion Google a été fermée.');
       } else if (err.code === 'auth/popup-blocked') {
         setErrorMsg('La fenêtre contextuelle Google a été bloquée par le navigateur. Vous pouvez utiliser la connexion par e-mail.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'bookly-eight-omega.vercel.app';
+        setErrorMsg(
+          `Le domaine "${currentDomain}" n'est pas encore autorisé dans Firebase Console. Ajoutez-le dans Firebase Console > Authentication > Settings > Authorized domains. En attendant, connectez-vous avec vos identifiants e-mail ci-dessous.`
+        );
       } else {
         setErrorMsg(err.message || 'Échec de la connexion avec Google. Veuillez réessayer ou utiliser l\'authentification par e-mail.');
       }
