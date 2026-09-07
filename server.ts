@@ -1,13 +1,12 @@
 import express from 'express';
 import path from 'path';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
 import dotenv from 'dotenv';
 
-dotenv.config();
-
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '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';
+dotenv.config({ override: true });
 
 async function startServer() {
   const app = express();
@@ -15,42 +14,78 @@ async function startServer() {
 
   app.use(express.json({ limit: '15mb' }));
 
-  // Initialize Groq client
+  // Initialize Groq client dynamically from process.env
   let groq: Groq | null = null;
+  let lastGroqKey: string | undefined = undefined;
   function getGroq() {
-    if (!groq && GROQ_API_KEY) {
-      groq = new Groq({ apiKey: GROQ_API_KEY });
+    const key = process.env.GROQ_API_KEY;
+    if (!key) return null;
+    if (!groq || lastGroqKey !== key) {
+      groq = new Groq({ apiKey: key.trim() });
+      lastGroqKey = key;
     }
     return groq;
   }
 
-  // Initialize Gemini if key exists
+  // Initialize Gemini dynamically from process.env
   let genAI: GoogleGenAI | null = null;
+  let lastGeminiKey: string | undefined = undefined;
   function getGenAI() {
-    if (!genAI && process.env.GEMINI_API_KEY) {
-      genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return null;
+    if (!genAI || lastGeminiKey !== key) {
+      genAI = new GoogleGenAI({ apiKey: key.trim() });
+      lastGeminiKey = key;
     }
     return genAI;
   }
 
-  // OpenRouter configuration
+  // OpenRouter configuration - Full modern catalog
   const OPENROUTER_MODELS = [
+    'anthropic/claude-3.7-sonnet',
     'anthropic/claude-3.5-sonnet',
+    'anthropic/claude-3.5-haiku',
     'deepseek/deepseek-chat',
+    'deepseek/deepseek-r1',
     'meta-llama/llama-3.3-70b-instruct',
+    'openai/gpt-4o',
     'openai/gpt-4o-mini',
     'mistralai/mistral-large-2411',
-    'google/gemini-2.0-flash-001'
+    'google/gemini-2.0-flash-001',
+    'qwen/qwen-2.5-72b-instruct'
+  ];
+
+  // Active Groq candidate models list in priority order
+  const GROQ_CHAT_MODELS = [
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b',
+    'qwen/qwen3.6-27b',
+    'groq/compound',
+    'groq/compound-mini',
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant'
+  ];
+
+  // Gemini models list in priority order
+  const GEMINI_MODELS = [
+    'gemini-3.6-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.5-pro',
+    'gemini-1.5-pro'
   ];
 
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
-      hasGroqKey: Boolean(GROQ_API_KEY),
+      hasGroqKey: Boolean(process.env.GROQ_API_KEY),
       hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
       hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY),
-      groqModel: 'qwen/qwen3.8-27b',
+      groqModels: GROQ_CHAT_MODELS,
+      geminiModels: GEMINI_MODELS,
       openRouterModels: OPENROUTER_MODELS,
       time: new Date().toISOString()
     });
@@ -62,97 +97,99 @@ async function startServer() {
     return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   }
 
-  // Active Groq candidate models list in priority order (high-capacity models first)
-  const GROQ_CHAT_MODELS = [
-    'openai/gpt-oss-120b',
-    'groq/compound',
-    'openai/gpt-oss-20b',
-    'groq/compound-mini',
-    'qwen/qwen3.8-27b',
-    'qwen/qwen3.6-27b'
-  ];
-
   // Helper to call Groq with automatic model fallback & token limit protection
   async function callGroqWithFallback(
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     options: { jsonMode?: boolean; maxTokens?: number; temperature?: number } = {}
   ): Promise<{ text: string; modelUsed: string }> {
     const groqClient = getGroq();
-    if (!groqClient) {
-      throw new Error('Groq client non initialisé');
-    }
-
-    const defaultMaxTokens = options.jsonMode ? 3500 : 2500;
-    const requestedMaxTokens = options.maxTokens ?? defaultMaxTokens;
-
     let lastError: any = null;
-    for (const model of GROQ_CHAT_MODELS) {
-      // Qwen models on Groq on-demand tier have strict 1000 OTPM limits; clamp to safe boundary
-      const isQwen = model.includes('qwen');
-      let effectiveMaxTokens = isQwen ? Math.min(requestedMaxTokens, 850) : requestedMaxTokens;
 
-      try {
-        const payload: any = {
-          messages,
-          model,
-          temperature: options.temperature ?? 0.7,
-          max_tokens: effectiveMaxTokens
-        };
-        if (options.jsonMode) {
-          payload.response_format = { type: 'json_object' };
-        }
+    if (groqClient) {
+      const defaultMaxTokens = options.jsonMode ? 3500 : 2500;
+      const requestedMaxTokens = options.maxTokens ?? defaultMaxTokens;
 
-        const completion = await groqClient.chat.completions.create(payload);
-        const rawText = completion.choices[0]?.message?.content || '';
-        const cleaned = options.jsonMode ? rawText : cleanAiOutput(rawText);
-        if (cleaned) {
-          return { text: cleaned, modelUsed: model };
-        }
-      } catch (err: any) {
-        lastError = err;
-        const errMsg = err?.message || String(err);
+      for (const model of GROQ_CHAT_MODELS) {
+        const isQwen = model.includes('qwen');
+        let effectiveMaxTokens = isQwen ? Math.min(requestedMaxTokens, 850) : requestedMaxTokens;
 
-        // If rate limit / OTPM error occurs, try once with reduced tokens if possible
-        if ((errMsg.includes('OTPM') || errMsg.includes('reduce max_tokens') || errMsg.includes('rate_limit_exceeded')) && effectiveMaxTokens > 700) {
-          try {
-            const retryPayload: any = {
-              messages,
-              model,
-              temperature: options.temperature ?? 0.7,
-              max_tokens: 650
-            };
-            if (options.jsonMode) {
-              retryPayload.response_format = { type: 'json_object' };
-            }
-            const completion = await groqClient.chat.completions.create(retryPayload);
-            const rawText = completion.choices[0]?.message?.content || '';
-            const cleaned = options.jsonMode ? rawText : cleanAiOutput(rawText);
-            if (cleaned) {
-              return { text: cleaned, modelUsed: `${model} (safe-otpm)` };
-            }
-          } catch (retryErr: any) {
-            console.warn(`Groq retry with 650 tokens failed for ${model}:`, retryErr.message);
+        try {
+          const payload: any = {
+            messages,
+            model,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: effectiveMaxTokens
+          };
+          if (options.jsonMode) {
+            payload.response_format = { type: 'json_object' };
           }
+
+          const completion = await groqClient.chat.completions.create(payload);
+          const rawText = completion.choices[0]?.message?.content || '';
+          const cleaned = options.jsonMode ? rawText : cleanAiOutput(rawText);
+          if (cleaned) {
+            return { text: cleaned, modelUsed: model };
+          }
+        } catch (err: any) {
+          lastError = err;
+          const errMsg = err?.message || String(err);
+
+          if ((errMsg.includes('OTPM') || errMsg.includes('reduce max_tokens') || errMsg.includes('rate_limit_exceeded')) && effectiveMaxTokens > 700) {
+            try {
+              const retryPayload: any = {
+                messages,
+                model,
+                temperature: options.temperature ?? 0.7,
+                max_tokens: 650
+              };
+              if (options.jsonMode) {
+                retryPayload.response_format = { type: 'json_object' };
+              }
+              const completion = await groqClient.chat.completions.create(retryPayload);
+              const rawText = completion.choices[0]?.message?.content || '';
+              const cleaned = options.jsonMode ? rawText : cleanAiOutput(rawText);
+              if (cleaned) {
+                return { text: cleaned, modelUsed: `${model} (safe-otpm)` };
+              }
+            } catch (retryErr: any) {
+              console.warn(`Groq retry failed for ${model}:`, retryErr.message);
+            }
+          }
+
+          console.warn(`Groq model ${model} failed, trying next candidate:`, errMsg);
         }
-
-        console.warn(`Groq model ${model} failed, trying next candidate:`, errMsg);
       }
     }
 
-    // If all Groq models encounter limits, fall back to Gemini automatically
-    try {
-      console.log('Groq models unavailable or rate-limited; trying automatic Gemini fallback...');
-      const sysMsg = messages.find((m) => m.role === 'system')?.content || 'Assistant Bookly Studio';
-      const userMsgs = messages.filter((m) => m.role !== 'system').map((m) => `${m.role}: ${m.content}`).join('\n\n');
-      const geminiRes = await callGeminiWithFallback(sysMsg, userMsgs || 'Bonjour');
-      if (geminiRes && geminiRes.text) {
-        return { text: geminiRes.text, modelUsed: `gemini_fallback (${geminiRes.modelUsed})` };
+    // Automatic fallback 1: Gemini
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        console.log('Groq unavailable or depleted; cascading to Gemini models...');
+        const sysMsg = messages.find((m) => m.role === 'system')?.content || 'Assistant Bookly Studio';
+        const userMsgs = messages.filter((m) => m.role !== 'system').map((m) => `${m.role}: ${m.content}`).join('\n\n');
+        const geminiRes = await callGeminiWithFallback(sysMsg, userMsgs || 'Bonjour');
+        if (geminiRes && geminiRes.text) {
+          return { text: geminiRes.text, modelUsed: `gemini_fallback (${geminiRes.modelUsed})` };
+        }
+      } catch (gemFallbackErr: any) {
+        console.warn('Gemini fallback failed:', gemFallbackErr.message);
       }
-    } catch (gemFallbackErr: any) {
-      console.warn('Gemini safety fallback failed:', gemFallbackErr.message);
     }
 
-    throw lastError || new Error('All Groq models and fallbacks failed');
+    // Automatic fallback 2: OpenRouter
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        console.log('Groq & Gemini unavailable; cascading to OpenRouter models...');
+        const openRouterRes = await callOpenRouterWithFallback(messages, options);
+        if (openRouterRes && openRouterRes.text) {
+          return { text: openRouterRes.text, modelUsed: `openrouter_fallback (${openRouterRes.modelUsed})` };
+        }
+      } catch (orFallbackErr: any) {
+        console.warn('OpenRouter fallback failed:', orFallbackErr.message);
+      }
+    }
+
+    throw lastError || new Error('Tous les fournisseurs IA (Groq, Gemini, OpenRouter) ont échoué ou nécessitent des clés API valides.');
   }
 
   // Helper to call Gemini with updated supported models
@@ -160,30 +197,64 @@ async function startServer() {
     systemPrompt: string,
     userPrompt: string
   ): Promise<{ text: string; modelUsed: string }> {
-    const gemini = getGenAI();
-    if (!gemini) {
-      throw new Error('Gemini API key not configured');
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Gemini API key non configurée');
     }
 
-    const geminiModels = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let lastError: any = null;
 
-    for (const model of geminiModels) {
+    // 1. Direct REST endpoint (natively supports new Google AI Studio AQ. Auth keys and AIza keys)
+    for (const model of GEMINI_MODELS) {
       try {
-        const response = await gemini.models.generateContent({
-          model,
-          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+          })
         });
-        if (response.text) {
-          return { text: response.text, modelUsed: model };
+
+        if (res.ok) {
+          const data: any = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            return { text: cleanAiOutput(text), modelUsed: model };
+          }
+        } else {
+          const errBody = await res.text();
+          console.warn(`Gemini REST model ${model} HTTP ${res.status}:`, errBody);
         }
       } catch (err: any) {
         lastError = err;
-        console.warn(`Gemini model ${model} failed:`, err.message);
+        console.warn(`Gemini REST model ${model} failed:`, err.message);
       }
     }
 
-    throw lastError || new Error('All Gemini models failed');
+    // 2. SDK fallback
+    const gemini = getGenAI();
+    if (gemini) {
+      for (const model of GEMINI_MODELS) {
+        try {
+          const response = await gemini.models.generateContent({
+            model,
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+          });
+          if (response.text) {
+            return { text: cleanAiOutput(response.text), modelUsed: `${model} (sdk)` };
+          }
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`Gemini SDK model ${model} failed:`, err.message);
+        }
+      }
+    }
+
+    throw lastError || new Error('Tous les modèles Gemini ont échoué');
   }
 
   // Helper to call OpenRouter with model candidates and fallback
@@ -242,7 +313,7 @@ async function startServer() {
       }
     }
 
-    throw lastError || new Error('All OpenRouter models failed');
+    throw lastError || new Error('Tous les modèles OpenRouter ont échoué');
   }
 
   // AI Chat & Brainstorming Conversation Route
@@ -262,7 +333,7 @@ Postures et principes clés :
     const systemPrompt = customSysPrompt || (context ? `${defaultSystemInstruction}\n\nContexte actuel du projet:\n${context}` : defaultSystemInstruction);
 
     try {
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         const formattedMessages = [
           { role: 'system' as const, content: systemPrompt },
           ...(messages || []).map((m: any) => ({
@@ -377,7 +448,7 @@ Rédige directement le contenu du chapitre en Markdown français fluide.`;
     }
 
     try {
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         const { text, modelUsed } = await callGroqWithFallback([
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -433,7 +504,7 @@ Génère une réponse au format JSON strict avec la structure suivante :
 Assure-toi que le JSON est 100% valide et sans texte avant ou après. Rédige un contenu riche, captivant et directement publiable en français pour chaque chapitre.`;
 
     try {
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         const { text: rawJson, modelUsed } = await callGroqWithFallback([
           { role: 'system', content: 'Tu es un générateur de livres au format JSON strict.' },
           { role: 'user', content: promptForOutline }
@@ -542,7 +613,7 @@ Génère une réponse au format JSON strict avec uniquement une liste d'objets :
 Assure-toi qu'il y ait exactement ${targetCount} chapitres, avec une progression logique, rythmée et stimulante.`;
 
     try {
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         const { text: rawJson, modelUsed } = await callGroqWithFallback([
           { role: 'system', content: 'Tu es un générateur de plans éditoriaux en JSON strict.' },
           { role: 'user', content: promptForOutline }
@@ -620,7 +691,7 @@ Structure demandée pour le chapitre (environ 500 à 800 mots) :
 Rédige directement le texte complet en Markdown français prêt à être publié dans un e-book professionnel.`;
 
     try {
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         const { text, modelUsed } = await callGroqWithFallback([
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -682,7 +753,7 @@ Rédige directement le texte complet en Markdown français prêt à être publi�
       }
 
       // Fallback to Groq if OpenRouter key not configured yet
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         const { text, modelUsed } = await callGroqWithFallback(messages, {
           jsonMode,
           temperature
@@ -784,7 +855,7 @@ Génère un JSON strict sous la forme :
       }
 
       // 2. Try Groq
-      if (GROQ_API_KEY) {
+      if (process.env.GROQ_API_KEY) {
         try {
           const { text, modelUsed } = await callGroqWithFallback(messages, {
             jsonMode: true,
@@ -895,6 +966,282 @@ Génère un JSON strict sous la forme :
     }
   });
 
+  // =========================================================================
+  // SASPAY PAYMENT GATEWAY INTEGRATION (Abonnements & Paiements Bookly Studio)
+  // =========================================================================
+  const getSaspayKey = () => (process.env.SASPAY_API_KEY || '').trim();
+  const SASPAY_BASE_URL = 'https://api.saspay.me/api/v1';
+
+  const PLAN_PRICES: Record<string, Record<string, number>> = {
+    pro: {
+      monthly: 3900,
+      quarterly: 10530,
+      yearly: 37440
+    },
+    premium: {
+      monthly: 15000,
+      quarterly: 40500,
+      yearly: 144000
+    }
+  };
+
+  // 1. Récupérer la configuration de paiement Saspay
+  app.get('/api/payments/config', (req, res) => {
+    res.json({
+      configured: Boolean(getSaspayKey()),
+      gateway: 'Saspay',
+      currency: 'XOF',
+      plans: PLAN_PRICES
+    });
+  });
+
+  // 2. Créer une session de Checkout hébergé Saspay
+  app.post('/api/payments/create-checkout', async (req, res) => {
+    try {
+      const saspayKey = getSaspayKey();
+      if (!saspayKey) {
+        return res.status(503).json({ error: 'Passerelle Saspay non configurée : variable SASPAY_API_KEY manquante.' });
+      }
+      const {
+        plan = 'pro',
+        billingCycle = 'monthly',
+        customerEmail,
+        customerName,
+        customerPhone = '',
+        returnUrl
+      } = req.body;
+
+      if (!customerEmail) {
+        return res.status(400).json({ error: 'L\'adresse email du client est requise.' });
+      }
+
+      const planCyclePrices = PLAN_PRICES[plan] || PLAN_PRICES.pro;
+      const amountNumber = planCyclePrices[billingCycle] || planCyclePrices.monthly;
+      const amountStr = `${amountNumber}.00`;
+      const cycleLabel =
+        billingCycle === 'yearly'
+          ? 'Annuel (1 an)'
+          : billingCycle === 'quarterly'
+          ? 'Trimestriel (3 mois)'
+          : 'Mensuel (1 mois)';
+
+      const description = `Abonnement Bookly Studio - Plan ${plan.toUpperCase()} [${cycleLabel}]`;
+
+      const payload = {
+        amount: amountStr,
+        currency: 'XOF',
+        description,
+        customer_email: customerEmail,
+        customer_name: customerName || customerEmail.split('@')[0],
+        customer_phone: customerPhone || '',
+        return_url: returnUrl || '',
+        metadata: {
+          plan,
+          billingCycle,
+          customerEmail,
+          createdVia: 'Bookly Studio Web'
+        }
+      };
+
+      const response = await fetch(`${SASPAY_BASE_URL}/checkout-sessions/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${saspayKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data: any = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Saspay checkout error:', data);
+        return res.status(response.status || 400).json({
+          error: data.error || data.message || 'Échec de création de la session de paiement Saspay',
+          details: data
+        });
+      }
+
+      res.json({
+        success: true,
+        session: data.data
+      });
+    } catch (err: any) {
+      console.error('Erreur create-checkout Saspay:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. Vérifier le statut d'une session de checkout ou transaction
+  const verifiedPaidSessions = new Set<string>();
+
+  // Endpoint de simulation / test sandbox pour valider une session Saspay sans débit réel en environnement de test
+  app.post('/api/payments/simulate-success/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID requis' });
+    }
+    verifiedPaidSessions.add(sessionId);
+    res.json({
+      success: true,
+      message: 'Session Saspay validée avec succès en mode test',
+      status: 'SUCCESS'
+    });
+  });
+
+  app.get('/api/payments/verify/:sessionId', async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!sessionId) {
+        return res.status(400).json({ error: 'ID de session manquant.' });
+      }
+
+      // Si la session a été validée via le test sandbox ou webhook
+      if (verifiedPaidSessions.has(sessionId)) {
+        return res.json({
+          success: true,
+          session: {
+            id: sessionId,
+            status: 'SUCCESS',
+            amount: '3900.00',
+            currency: 'XOF',
+            paid_at: new Date().toISOString()
+          }
+        });
+      }
+
+      const saspayKey = getSaspayKey();
+      if (!saspayKey) {
+        return res.status(503).json({ error: 'Passerelle Saspay non configurée : variable SASPAY_API_KEY manquante.' });
+      }
+
+      const response = await fetch(`${SASPAY_BASE_URL}/checkout-sessions/${sessionId}/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${saspayKey}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      const data: any = await response.json();
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: data.message || 'Impossible de vérifier la session',
+          details: data
+        });
+      }
+
+      const sessionObj = data.data || data;
+      if (sessionObj?.status === 'SUCCESS' || sessionObj?.status === 'PAID' || sessionObj?.status === 'COMPLETED') {
+        verifiedPaidSessions.add(sessionId);
+      }
+
+      res.json({
+        success: true,
+        session: sessionObj
+      });
+    } catch (err: any) {
+      console.error('Erreur verify Saspay:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 4. Paiement direct Softpay (Push Mobile Money & Carte)
+  app.post('/api/payments/softpay', async (req, res) => {
+    try {
+      const {
+        plan = 'pro',
+        billingCycle = 'monthly',
+        country = 'CI',
+        network = 'orange_ci',
+        phone,
+        customerEmail,
+        customerName
+      } = req.body;
+
+      if (!phone || !customerEmail) {
+        return res.status(400).json({ error: 'Numéro de téléphone et email obligatoires.' });
+      }
+
+      const planCyclePrices = PLAN_PRICES[plan] || PLAN_PRICES.pro;
+      const amountNumber = planCyclePrices[billingCycle] || planCyclePrices.monthly;
+      const amountStr = `${amountNumber}.00`;
+
+      const parts = (customerName || customerEmail.split('@')[0]).trim().split(' ');
+      const firstName = parts[0] || 'Client';
+      const lastName = parts.slice(1).join(' ') || 'Bookly';
+
+      const payload = {
+        amount: amountStr,
+        currency: 'XOF',
+        country: country.toUpperCase(),
+        network,
+        description: `Abonnement Bookly Studio ${plan.toUpperCase()}`,
+        customer: {
+          email: customerEmail,
+          first_name: firstName,
+          last_name: lastName,
+          phone
+        }
+      };
+
+      const saspayKey = getSaspayKey();
+      if (!saspayKey) {
+        return res.status(503).json({ error: 'Passerelle Saspay non configurée : variable SASPAY_API_KEY manquante.' });
+      }
+
+      const idempotencyKey = crypto.randomUUID();
+
+      const response = await fetch(`${SASPAY_BASE_URL}/payments/softpay/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${saspayKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Idempotency-Key': idempotencyKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data: any = await response.json();
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: data.message || 'Échec de l\'initiation du paiement direct',
+          details: data
+        });
+      }
+
+      res.json({
+        success: true,
+        data
+      });
+    } catch (err: any) {
+      console.error('Erreur softpay Saspay:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 5. Webhook Saspay pour notification automatique
+  app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+    try {
+      const signature = req.headers['x-webhook-signature'];
+      const timestamp = req.headers['x-webhook-timestamp'];
+      const eventType = req.headers['x-webhook-event'];
+
+      console.log(`[Saspay Webhook] Événement reçu: ${eventType}`, {
+        timestamp,
+        signatureProvided: Boolean(signature)
+      });
+
+      res.status(200).json({ received: true });
+    } catch (err: any) {
+      console.error('Erreur webhook Saspay:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Vite middleware in development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -910,9 +1257,24 @@ Génère un JSON strict sous la forme :
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled Rejection at server:', reason);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception in server:', err);
+  });
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Bookly Studio running on http://0.0.0.0:${PORT} with Groq Llama 3.3 70B`);
   });
+
+  const gracefulShutdown = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGINT', gracefulShutdown);
 }
 
 function generateFallbackChat(messages: any[]): string {

@@ -9,12 +9,12 @@ import {
 import {
   INITIAL_ADMIN_USERS,
   INITIAL_API_DAILY_STATS,
-  INITIAL_AFFILIATE_COURSES,
   INITIAL_ERROR_LOGS,
   DEFAULT_ADMIN_CONFIG,
   INITIAL_SUBSCRIPTION_REVENUE_STATS,
-  INITIAL_CHARIOT_DELIVERY_REVENUE_STATS
+  ADMIN_SECURITY_CREDENTIALS
 } from './data/adminData';
+import { checkCanCreateProject } from './services/subscriptionService';
 import {
   ViewType,
   Project,
@@ -24,7 +24,6 @@ import {
   AppSettings,
   AdminUser,
   AdminApiDailyStat,
-  AdminAffiliateCourse,
   AdminErrorLog,
   AdminGlobalConfig
 } from './types';
@@ -59,8 +58,10 @@ export default function App() {
   // Check if initial authentication session exists
   const hasExistingSession = () => {
     try {
-      const session = localStorage.getItem('bookly_auth_session');
-      return Boolean(session);
+      const session = localStorage.getItem('bookly_user');
+      if (!session) return false;
+      const parsed = JSON.parse(session);
+      return Boolean(parsed && parsed.email && parsed.email !== 'client@bookly.studio');
     } catch {
       return false;
     }
@@ -103,18 +104,6 @@ export default function App() {
   });
 
   const [adminApiStats] = useState<AdminApiDailyStat[]>(INITIAL_API_DAILY_STATS);
-
-  const [adminAffiliateCourses, setAdminAffiliateCourses] = useState<AdminAffiliateCourse[]>(() => {
-    const saved = localStorage.getItem('bookly_admin_affiliate');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return INITIAL_AFFILIATE_COURSES;
-  });
 
   const [adminErrorLogs, setAdminErrorLogs] = useState<AdminErrorLog[]>(() => {
     const saved = localStorage.getItem('bookly_admin_logs');
@@ -194,7 +183,12 @@ export default function App() {
     const saved = localStorage.getItem('bookly_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed.email === 'client@bookly.studio') {
+          localStorage.removeItem('bookly_user');
+          return INITIAL_USER;
+        }
+        return parsed;
       } catch (e) {
         console.error(e);
       }
@@ -226,15 +220,29 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
+        // Le compte administrateur possède son adresse mail dédiée fictive
         const isUserAdmin =
-          fbUser.email.toLowerCase() === 'soumailaharoune8@gmail.com' ||
-          fbUser.email.toLowerCase() === 'admin@bookly.studio';
+          fbUser.email.toLowerCase() === ADMIN_SECURITY_CREDENTIALS.adminEmail.toLowerCase();
+
+        // L'adresse soumailaharoune8@gmail.com est un compte utilisateur auteur standard, sans droits admin
+        const isStandardUser = fbUser.email.toLowerCase() === 'soumailaharoune8@gmail.com';
 
         try {
           const cloudProfile = await firestoreService.getUserProfile(fbUser.uid);
           if (cloudProfile) {
-            setUser(cloudProfile);
-            localStorage.setItem('bookly_user', JSON.stringify(cloudProfile));
+            let sanitizedProfile = { ...cloudProfile };
+            if (isStandardUser) {
+              sanitizedProfile.isAdmin = false;
+              if (sanitizedProfile.role === 'Super Administrateur Plateforme') {
+                sanitizedProfile.role = 'Auteur & Créateur Digital';
+              }
+              if (sanitizedProfile.planRenewsAt === 'Illimité (Admin)') {
+                sanitizedProfile.plan = 'free';
+                sanitizedProfile.planRenewsAt = 'Plan Gratuit Inclus';
+              }
+            }
+            setUser(sanitizedProfile);
+            localStorage.setItem('bookly_user', JSON.stringify(sanitizedProfile));
           } else {
             const formattedName =
               fbUser.displayName ||
@@ -243,22 +251,23 @@ export default function App() {
                 .replace(/[._-]/g, ' ')
                 .replace(/\b\w/g, (c) => c.toUpperCase());
 
+            const effectiveAdmin = isUserAdmin && !isStandardUser;
             const newProfile: UserProfile = {
               id: fbUser.uid,
               name: formattedName,
               email: fbUser.email,
-              role: isUserAdmin ? 'Super Administrateur Plateforme' : 'Auteur & Créateur Digital',
+              role: effectiveAdmin ? 'Super Administrateur Plateforme' : 'Auteur & Créateur Digital',
               bio: 'Compte connecté via Firebase. Vos projets et manuscrits sont enregistrés de façon sécurisée.',
-              avatarBg: isUserAdmin
+              avatarBg: effectiveAdmin
                 ? 'linear-gradient(135deg, #d97706, #f59e0b)'
                 : 'linear-gradient(135deg, #2563eb, #38bdf8)',
               avatarUrl: fbUser.photoURL || undefined,
               authProvider: 'google',
-              isAdmin: isUserAdmin,
+              isAdmin: effectiveAdmin,
               signature: `${formattedName} — Auteur Bookly`,
-              plan: isUserAdmin ? 'premium' : 'free',
+              plan: effectiveAdmin ? 'premium' : 'free',
               planBilling: 'monthly',
-              planRenewsAt: isUserAdmin ? 'Illimité (Admin)' : 'Plan Gratuit Inclus',
+              planRenewsAt: effectiveAdmin ? 'Illimité (Admin)' : 'Plan Gratuit Inclus',
               lifetimeProjectsCreated: 0,
               monthlyProjectsCreated: 0,
               dailyChatbotCount: 0,
@@ -269,9 +278,27 @@ export default function App() {
             await firestoreService.saveUserProfile(newProfile);
             localStorage.setItem('bookly_user', JSON.stringify(newProfile));
           }
-          if (isUserAdmin) {
+
+          if (isUserAdmin && !isStandardUser) {
             setIsAdminUnlocked(true);
+          } else {
+            setIsAdminUnlocked(false);
+            try {
+              const adminAuthRaw = localStorage.getItem('bookly_admin_auth');
+              if (adminAuthRaw) {
+                const parsed = JSON.parse(adminAuthRaw);
+                if (
+                  parsed.adminEmail &&
+                  parsed.adminEmail.toLowerCase() !== ADMIN_SECURITY_CREDENTIALS.adminEmail.toLowerCase()
+                ) {
+                  localStorage.removeItem('bookly_admin_auth');
+                }
+              }
+            } catch {
+              localStorage.removeItem('bookly_admin_auth');
+            }
           }
+
           setIsAuthMandatory(false);
           setIsAuthModalOpen(false);
         } catch (err) {
@@ -281,6 +308,53 @@ export default function App() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Check for Saspay checkout return callback in URL params
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const isPaymentReturn = params.get('payment_session');
+      const paymentStatus = params.get('payment_status');
+      const sessionId = params.get('session_id');
+
+      if (isPaymentReturn || paymentStatus === 'success' || sessionId) {
+        if (sessionId) {
+          fetch(`/api/payments/verify/${sessionId}`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.success && (data.session?.status === 'SUCCESS' || data.session?.status === 'PAID')) {
+                const plan = (data.session?.metadata?.plan || 'pro') as 'pro' | 'premium';
+                const billingCycle = (data.session?.metadata?.billingCycle || 'monthly') as 'monthly' | 'quarterly' | 'yearly';
+                handleUpgradeSuccess({
+                  ...user,
+                  plan,
+                  planBilling: billingCycle,
+                  planRenewsAt: billingCycle === 'yearly' ? 'Dans 1 an (Annuel)' : billingCycle === 'quarterly' ? 'Dans 3 mois (Trimestriel)' : 'Dans 30 jours (Mensuel)'
+                });
+                showToast(
+                  'Abonnement Saspay validé !',
+                  `Votre souscription au Plan ${plan.toUpperCase()} a été confirmée avec succès.`,
+                  'success'
+                );
+              }
+            })
+            .catch(console.error);
+        } else if (paymentStatus === 'success') {
+          showToast(
+            'Paiement Saspay enregistré !',
+            'Merci pour votre souscription à Bookly Studio.',
+            'success'
+          );
+        }
+
+        // Clean query params from URL
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   // Toasts
@@ -302,10 +376,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bookly_admin_users', JSON.stringify(adminUsers));
   }, [adminUsers]);
-
-  useEffect(() => {
-    localStorage.setItem('bookly_admin_affiliate', JSON.stringify(adminAffiliateCourses));
-  }, [adminAffiliateCourses]);
 
   useEffect(() => {
     localStorage.setItem('bookly_admin_logs', JSON.stringify(adminErrorLogs));
@@ -387,9 +457,15 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('SignOut error', e);
+    }
     localStorage.removeItem('bookly_auth_session');
     localStorage.removeItem('bookly_admin_auth');
+    localStorage.removeItem('bookly_user');
     setIsAdminUnlocked(false);
     setIsAuthMandatory(true);
     setIsAuthModalOpen(true);
@@ -403,6 +479,12 @@ export default function App() {
 
   const handleUpgradeSuccess = (updatedUser: UserProfile) => {
     setUser(updatedUser);
+    localStorage.setItem('bookly_user_profile', JSON.stringify(updatedUser));
+    if (updatedUser.id) {
+      firestoreService.saveUserProfile(updatedUser).catch((err) => {
+        console.warn('Erreur sauvegarde profil Firestore:', err);
+      });
+    }
     setIsSubscriptionModalOpen(false);
     showToast(
       'Abonnement Activé !',
@@ -420,23 +502,23 @@ export default function App() {
     setStudioProject(null);
   };
 
+  const handleOpenNewProject = () => {
+    const check = checkCanCreateProject(user, projects.length);
+    if (!check.allowed) {
+      showToast('Limite d\'e-book atteinte', check.reason || 'Limite de votre abonnement atteinte.', 'error');
+      handleOpenSubscriptionModal('pro');
+      return;
+    }
+    setIsNewProjectOpen(true);
+  };
+
   const handleCreateProject = (newProject: Project) => {
-    // Free plan quota checks
-    if (user.plan === 'free' || user.plan === 'basic') {
-      const lifetime = user.lifetimeProjectsCreated ?? projects.length;
-      if (lifetime >= 5) {
-        showToast('Limite atteinte', 'La formule gratuite est limitée à 5 projets au total à vie. Passez à la version Pro pour continuer.', 'error');
-        handleOpenSubscriptionModal('pro');
-        return;
-      }
-      const activeCount = projects.filter(
-        (p) => p.status === 'in_progress' || p.status === 'ai_generating' || p.status === 'draft'
-      ).length;
-      if (activeCount >= 1) {
-        showToast('Projet en cours existant', 'La formule gratuite n\'autorise qu\'un seul projet en cours en simultané. Débloquez les projets illimités avec Pro.', 'error');
-        handleOpenSubscriptionModal('pro');
-        return;
-      }
+    // Vérification centralisée des limites d'abonnement
+    const check = checkCanCreateProject(user, projects.length);
+    if (!check.allowed) {
+      showToast('Limite d\'e-book atteinte', check.reason || 'Limite de votre abonnement atteinte.', 'error');
+      handleOpenSubscriptionModal('pro');
+      return;
     }
 
     setProjects((prev) => [newProject, ...prev]);
@@ -457,10 +539,17 @@ export default function App() {
   };
 
   const handleDuplicateProject = (project: Project) => {
+    const check = checkCanCreateProject(user, projects.length);
+    if (!check.allowed) {
+      showToast('Limite d\'e-book atteinte', check.reason || 'Limite de votre abonnement atteinte.', 'error');
+      handleOpenSubscriptionModal('pro');
+      return;
+    }
     const duplicated: Project = {
       ...project,
       id: `proj-${Date.now()}`,
       title: `${project.title} (Copie)`,
+      status: 'draft',
       createdAt: new Date().toISOString().split('T')[0],
       updatedAt: 'À l\'instant'
     };
@@ -602,7 +691,7 @@ export default function App() {
           }
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-        onOpenNewProject={() => setIsNewProjectOpen(true)}
+        onOpenNewProject={handleOpenNewProject}
         onOpenBrainstorm={() => setIsBrainstormOpen(true)}
         projects={projects}
         isAdminUnlocked={isAdminUnlocked}
@@ -618,7 +707,7 @@ export default function App() {
               setCurrentView(view);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            onOpenNewProject={() => setIsNewProjectOpen(true)}
+            onOpenNewProject={handleOpenNewProject}
             onOpenBrainstorm={() => setIsBrainstormOpen(true)}
             onOpenStudio={(proj) => setStudioProject(proj)}
             onOpenExport={(proj) => setExportItem(proj || projects[0])}
@@ -628,7 +717,7 @@ export default function App() {
         {currentView === 'projects' && (
           <ProjectsView
             projects={projects}
-            onOpenNewProject={() => setIsNewProjectOpen(true)}
+            onOpenNewProject={handleOpenNewProject}
             onOpenStudio={(proj) => setStudioProject(proj)}
             onOpenReader={(proj) => setReaderItem(proj)}
             onOpenExport={(proj) => setExportItem(proj)}
@@ -646,7 +735,7 @@ export default function App() {
             onToggleFavorite={handleToggleFavoriteBook}
             onNavigateToStudio={() => {
               setCurrentView('projects');
-              setIsNewProjectOpen(true);
+              handleOpenNewProject();
             }}
             onOpenStudio={(proj) => setStudioProject(proj)}
           />
@@ -689,9 +778,6 @@ export default function App() {
               onUpdateUsers={setAdminUsers}
               apiStats={adminApiStats}
               subscriptionRevenueStats={INITIAL_SUBSCRIPTION_REVENUE_STATS}
-              chariotDeliveryRevenueStats={INITIAL_CHARIOT_DELIVERY_REVENUE_STATS}
-              affiliateCourses={adminAffiliateCourses}
-              onUpdateAffiliateCourses={setAdminAffiliateCourses}
               errorLogs={adminErrorLogs}
               onUpdateErrorLogs={setAdminErrorLogs}
               globalConfig={adminGlobalConfig}

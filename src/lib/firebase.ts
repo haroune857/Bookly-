@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
   doc,
   getDocFromServer,
   setDoc,
@@ -24,11 +25,23 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore and Auth
-const firestoreDatabaseId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
-export const db = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with robust long-polling transport for proxy/container environments
+const firestoreDatabaseId = (firebaseConfig as any).firestoreDatabaseId;
+export const db = (() => {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        experimentalForceLongPolling: true
+      },
+      firestoreDatabaseId && firestoreDatabaseId !== '(default)' ? firestoreDatabaseId : undefined
+    );
+  } catch {
+    return firestoreDatabaseId && firestoreDatabaseId !== '(default)'
+      ? getFirestore(app, firestoreDatabaseId)
+      : getFirestore(app);
+  }
+})();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
@@ -87,12 +100,23 @@ export async function testFirebaseConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     console.log('Firebase connection verified successfully.');
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase is offline or connecting in background.');
+  } catch (error: any) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (
+      errorMsg.includes('the client is offline') ||
+      errorMsg.includes('unavailable') ||
+      errorMsg.includes('permission-denied')
+    ) {
+      console.warn('Firebase connection notice: App operating in offline/resilient cache mode.', errorMsg);
+    } else {
+      console.warn('Firebase connection test notice:', errorMsg);
     }
   }
 }
 
-// Trigger initial connection test safely
-testFirebaseConnection().catch(() => {});
+// Trigger initial connection test safely after runtime mounts
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    testFirebaseConnection().catch(() => {});
+  }, 1000);
+}

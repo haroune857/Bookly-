@@ -17,6 +17,7 @@ import {
   WidthType,
   convertInchesToTwip
 } from 'docx';
+import { jsPDF } from 'jspdf';
 import { Project, LibraryBook, Chapter } from '../types';
 import { generateCoverPageHtml } from './coverVectorRenderer';
 
@@ -940,4 +941,218 @@ export function generatePrintableBookHtml(item: Project | LibraryBook): string {
 
 </body>
 </html>`;
+}
+
+/**
+ * Génère un véritable fichier PDF Haute Définition / 4K au format livre standard A4 (210x297mm)
+ * prêt pour l'impression ou la lecture numérique avec page de couverture professionnelle,
+ * table des matières reliée et mise en page typographique rigoureuse.
+ */
+export async function generatePdfBlob(item: Project | LibraryBook): Promise<Blob> {
+  const structure = paginateBook(item);
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // 1. PAGE DE COUVERTURE (Style Manuscrit Élégant)
+  // Fond noble ardoise / bleu nuit
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // Cadre double ornemental doré
+  doc.setDrawColor(217, 119, 6);
+  doc.setLineWidth(0.8);
+  doc.rect(12, 12, 186, 273);
+  doc.setLineWidth(0.3);
+  doc.rect(14.5, 14.5, 181, 268);
+
+  // Catégorie en haut
+  doc.setTextColor(245, 158, 11);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text((structure.category || 'LIVRE DIGITAL').toUpperCase(), 105, 48, { align: 'center' });
+
+  // Titre principal au centre
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('times', 'bold');
+  doc.setFontSize(26);
+  const titleLines = doc.splitTextToSize(structure.title, 155);
+  doc.text(titleLines, 105, 95, { align: 'center' });
+
+  // Sous-titre
+  if (structure.subtitle) {
+    doc.setTextColor(203, 213, 225);
+    doc.setFont('times', 'italic');
+    doc.setFontSize(13);
+    const subtitleLines = doc.splitTextToSize(structure.subtitle, 150);
+    const subY = 95 + titleLines.length * 9 + 8;
+    doc.text(subtitleLines, 105, subY, { align: 'center' });
+  }
+
+  // Filet décoratif central
+  doc.setDrawColor(217, 119, 6);
+  doc.setLineWidth(0.5);
+  doc.line(75, 160, 135, 160);
+
+  // Auteur
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(`Par ${structure.author}`, 105, 218, { align: 'center' });
+
+  // Mention éditeur Bookly Studio
+  doc.setTextColor(148, 163, 184);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('ÉDITION BOOKLY STUDIO • MANUSCRIT CERTIFIÉ A4 4K', 105, 268, { align: 'center' });
+
+  // 2. SOMMAIRE / TABLE DES MATIÈRES
+  doc.addPage();
+  doc.setFillColor(255, 255, 255);
+
+  // En-tête courant haut
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(148, 163, 184);
+  doc.text(structure.title.slice(0, 45), 20, 15);
+  doc.text('Sommaire', 190, 15, { align: 'right' });
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.line(20, 18, 190, 18);
+
+  // Titre du Sommaire
+  doc.setFont('times', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Table des Matières', 105, 36, { align: 'center' });
+
+  doc.setDrawColor(99, 102, 241);
+  doc.setLineWidth(0.6);
+  doc.line(85, 41, 125, 41);
+
+  // Liste des chapitres
+  let tocY = 56;
+  structure.chapters.forEach((ch, idx) => {
+    if (tocY > 265) {
+      doc.addPage();
+      tocY = 30;
+    }
+    const num = String(idx + 1).padStart(2, '0');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(99, 102, 241);
+    doc.text(num, 22, tocY);
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    const chTitle = stripMarkdownToPureText(ch.title).slice(0, 52);
+    doc.text(chTitle, 34, tocY);
+
+    // Ligne pointillée
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.2);
+    doc.line(140, tocY - 1, 178, tocY - 1);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`p. ${idx + 3}`, 190, tocY, { align: 'right' });
+
+    tocY += 11;
+  });
+
+  // Pied de page sommaire
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(148, 163, 184);
+  doc.text('- Page 2 -', 105, 287, { align: 'center' });
+
+  // 3. PAGES DES CHAPITRES
+  let globalPageNumber = 3;
+
+  structure.chapters.forEach((ch, chIdx) => {
+    doc.addPage();
+
+    // En-tête courant
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text(structure.title.slice(0, 40), 20, 15);
+    doc.text(stripMarkdownToPureText(ch.title).slice(0, 40), 190, 15, { align: 'right' });
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(20, 18, 190, 18);
+
+    // Titre du chapitre
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(99, 102, 241);
+    doc.text(`CHAPITRE ${chIdx + 1}`, 20, 30);
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(15, 23, 42);
+    const cleanTitle = stripMarkdownToPureText(ch.title);
+    const titleSplits = doc.splitTextToSize(cleanTitle, 170);
+    doc.text(titleSplits, 20, 39);
+
+    let curY = 41 + titleSplits.length * 6;
+    doc.setDrawColor(99, 102, 241);
+    doc.setLineWidth(0.6);
+    doc.line(20, curY, 60, curY);
+    curY += 9;
+
+    // Découpage du contenu en paragraphes
+    const rawContent = ch.content || 'Contenu en cours de rédaction...';
+    const paragraphs = rawContent.split(/\n\n+/).filter((p) => p.trim().length > 0);
+
+    paragraphs.forEach((p) => {
+      const cleanP = stripMarkdownToPureText(p);
+      if (!cleanP) return;
+
+      doc.setFont('times', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+
+      const lines = doc.splitTextToSize(cleanP, 170);
+      const neededHeight = lines.length * 5.6 + 4;
+
+      if (curY + neededHeight > 275) {
+        // Pied de page avant saut
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(148, 163, 184);
+        doc.text(`- Page ${globalPageNumber} -`, 105, 287, { align: 'center' });
+        globalPageNumber++;
+
+        doc.addPage();
+        // En-tête courant
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(148, 163, 184);
+        doc.text(structure.title.slice(0, 40), 20, 15);
+        doc.text(stripMarkdownToPureText(ch.title).slice(0, 40), 190, 15, { align: 'right' });
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.line(20, 18, 190, 18);
+
+        curY = 28;
+      }
+
+      doc.text(lines, 20, curY);
+      curY += lines.length * 5.6 + 4;
+    });
+
+    // Pied de page fin de chapitre
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text(`- Page ${globalPageNumber} -`, 105, 287, { align: 'center' });
+    globalPageNumber++;
+  });
+
+  return doc.output('blob');
 }

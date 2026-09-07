@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { Menu, Bell, Sun, Moon, Sparkles, ChevronRight, X } from 'lucide-react';
+import {
+  Menu,
+  Bell,
+  Sun,
+  Moon,
+  Sparkles,
+  ChevronRight,
+  X,
+  LayoutDashboard,
+  FolderKanban,
+  Library,
+  Award
+} from 'lucide-react';
 import { ViewType, UserProfile } from '../types';
 import { ProfileMenu } from './ProfileMenu';
 
@@ -73,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-toggle-sidebar"
             onClick={onToggleSidebar}
-            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800"
+            className="h-10 w-10 flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800 shrink-0"
             aria-label="Ouvrir le menu"
           >
             <Menu className="w-5 h-5" />
@@ -117,21 +129,69 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
+        {/* Center: Desktop Navigation Bar (Aligné, direct et élégant) */}
+        <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 dark:bg-slate-800/60 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 h-10">
+          <button
+            onClick={() => onNavigate('dashboard')}
+            className={`h-8 px-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentView === 'dashboard'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span>Tableau de bord</span>
+          </button>
+          <button
+            onClick={() => onNavigate('projects')}
+            className={`h-8 px-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentView === 'projects'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <FolderKanban className="w-3.5 h-3.5" />
+            <span>Mes Livres</span>
+          </button>
+          <button
+            onClick={() => onNavigate('library')}
+            className={`h-8 px-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentView === 'library'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Library className="w-3.5 h-3.5" />
+            <span>Bibliothèque</span>
+          </button>
+          <button
+            onClick={() => onNavigate('formations')}
+            className={`h-8 px-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentView === 'formations'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            <span>Formations</span>
+          </button>
+        </nav>
+
         {/* Center / Right Quick Action Buttons & Status */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Upgrade Callout Button */}
           {isFreePlan ? (
             <button
               id="btn-header-upgrade"
               onClick={onOpenSubscriptionModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 shadow-md shadow-indigo-500/20 transition-all active:scale-[0.98]"
+              className="h-10 flex items-center gap-1.5 px-3.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 shadow-xs transition-all active:scale-[0.98]"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Passer à Pro</span>
               <span className="sm:hidden">Pro</span>
             </button>
           ) : (
-            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-[10px] font-extrabold uppercase text-indigo-600 dark:text-indigo-300">
+            <span className="hidden sm:inline-flex items-center gap-1 h-10 px-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-[10px] font-extrabold uppercase text-indigo-600 dark:text-indigo-300">
               <Sparkles className="w-3 h-3 text-indigo-500" />
               Plan {user.plan?.toUpperCase()}
             </span>
@@ -141,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-header-brainstorm"
             onClick={onOpenBrainstorm}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all"
+            className="hidden xl:flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all"
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
             <span>Brainstorming IA</span>
@@ -151,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-toggle-theme"
             onClick={onToggleDarkMode}
-            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800"
+            className="h-10 w-10 flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800 shrink-0"
             aria-label="Basculer le thème clair/sombre"
             title={darkMode ? 'Passer en mode clair' : 'Passer en mode sombre'}
           >
@@ -166,11 +226,11 @@ export const Header: React.FC<HeaderProps> = ({
                 setShowNotifications(!showNotifications);
                 setShowProfileMenu(false);
               }}
-              className="relative p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800"
+              className="relative h-10 w-10 flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800 shrink-0"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 ring-2 ring-white dark:ring-slate-900" />
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 ring-2 ring-white dark:ring-slate-900" />
             </button>
 
             {showNotifications && (
@@ -228,7 +288,7 @@ export const Header: React.FC<HeaderProps> = ({
                 setShowProfileMenu(!showProfileMenu);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800"
+              className="h-10 flex items-center gap-2 px-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800 shrink-0"
               title="Profil & Compte"
             >
               <div

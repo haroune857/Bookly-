@@ -191,13 +191,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               onNavigate('settings');
               onClose();
             }}
-            className="w-full flex items-center justify-between p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="w-full h-10 flex items-center justify-between px-3 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <User className="w-4 h-4 text-slate-400" />
+              <User className="w-4 h-4 text-slate-400 shrink-0" />
               <span>Mon Profil &amp; Compte</span>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           </button>
 
           <button
@@ -206,13 +206,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               onNavigate('projects');
               onClose();
             }}
-            className="w-full flex items-center justify-between p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="w-full h-10 flex items-center justify-between px-3 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <FolderKanban className="w-4 h-4 text-slate-400" />
+              <FolderKanban className="w-4 h-4 text-slate-400 shrink-0" />
               <span>Mes Projets &amp; Livres</span>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           </button>
 
           <button
@@ -221,13 +221,13 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({
               onClose();
               onOpenSubscriptionModal();
             }}
-            className="w-full flex items-center justify-between p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="w-full h-10 flex items-center justify-between px-3 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <CreditCard className="w-4 h-4 text-slate-400" />
+              <CreditCard className="w-4 h-4 text-slate-400 shrink-0" />
               <span>Abonnements &amp; Tarifs</span>
             </div>
-            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
               {currentPlan}
             </span>
           </button>

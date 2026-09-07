@@ -204,25 +204,7 @@ export interface AdminApiDailyStat {
   groqTokens: number;
   geminiTokens: number;
   requestsCount: number;
-  estimatedCost: number; // en Euros €
   avgLatencyMs: number;
-}
-
-export interface AdminAffiliateCourse {
-  id: string;
-  title: string;
-  author: string;
-  description: string;
-  affiliateUrl: string; // Chariot affiliate link
-  targetAudience: 'all' | 'paid_only'; // 'all' (Gratuits + Payants) or 'paid_only' (Réservé aux payants)
-  price: number;
-  commissionRate: number; // Pourcentage ex: 40%
-  category: string;
-  coverGradient: string;
-  clicksCount: number;
-  conversionsCount: number;
-  isActive: boolean;
-  createdAt: string;
 }
 
 export interface AdminErrorLog {
@@ -244,9 +226,7 @@ export interface AdminGlobalConfig {
   maxFreeProjects: number;
   defaultAiProvider: 'groq' | 'gemini';
   defaultGroqModel: string;
-  monthlyApiBudgetLimit: number; // en Euros €
   maintenanceMode: boolean;
-  affiliateTrackingEnabled: boolean;
   announcementBanner: string;
   allowFreeRegistration: boolean;
 }
@@ -261,32 +241,20 @@ export interface AdminKpiSummary {
   totalWordsGenerated: number;
   totalAiRequests: number;
   totalTokensConsumed: number;
-  monthlyApiCost: number;
-  monthlyApiBudget: number;
-  affiliateClicksTotal: number;
-  affiliateEarningsEstimate: number;
-  totalSubscriptionRevenueMonth: number;
-  totalChariotCommissionsMonth: number;
-  totalChariotGrossRevenueMonth: number;
+  geminiTokensConsumed: number;
+  groqTokensConsumed: number;
+  totalSubscriptionRevenueMonth: number; // en FCFA (Saspay)
+  proSubscriptionsCount: number;
+  premiumSubscriptionsCount: number;
 }
 
 export interface AdminSubscriptionRevenueStat {
   date: string;
   dayLabel: string;
-  proRevenue: number; // Abonnements Pro (ex: 29€)
-  premiumRevenue: number; // Abonnements Premium (ex: 49€)
-  totalSubscriptionRevenue: number;
+  proRevenue: number; // Abonnements Pro Saspay (FCFA)
+  premiumRevenue: number; // Abonnements Premium Saspay (FCFA)
+  totalSubscriptionRevenue: number; // Total Saspay (FCFA)
   newSubscriptionsCount: number;
   renewalsCount: number;
   churnCount: number;
-}
-
-export interface AdminChariotDeliveryRevenueStat {
-  date: string;
-  dayLabel: string;
-  grossMerchandiseValue: number; // Volume brut livré (€)
-  commissionsEarned: number; // Commissions perçues par Bookly (€)
-  ordersDeliveredCount: number; // Commandes livrées
-  averageCartValue: number; // Panier moyen (€)
-  topCourseTitle: string;
 }

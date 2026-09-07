@@ -17,7 +17,8 @@ import {
   Flame,
   Star,
   Lock,
-  LogOut
+  LogOut,
+  Clock
 } from 'lucide-react';
 import { UserProfile, AppSettings } from '../types';
 
@@ -651,7 +652,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>
-                    {currentPlan === 'pro' ? 'Formule Actuelle' : 'Passer à la Formule Pro'}
+                    {currentPlan === 'pro' ? 'Formule Actuelle' : 'Payer avec Saspay (Plan Pro)'}
                   </span>
                 </button>
               </div>
@@ -746,7 +747,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   <Building2 className="w-3.5 h-3.5" />
                   <span>
-                    {currentPlan === 'premium' ? 'Formule Actuelle' : 'Choisir la Formule Premium'}
+                    {currentPlan === 'premium' ? 'Formule Actuelle' : 'Payer avec Saspay (Plan Premium)'}
                   </span>
                 </button>
               </div>
@@ -761,8 +762,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h5 className="text-xs font-bold text-slate-900 dark:text-white">Sans engagement</h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">Modifiez ou résiliez en 1 clic à tout moment.</p>
+                <h5 className="text-xs font-bold text-slate-900 dark:text-white">Passerelle exclusive Saspay</h5>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Paiement pop-up sécurisé sans redirection.</p>
               </div>
             </div>
 
@@ -771,8 +772,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <h5 className="text-xs font-bold text-slate-900 dark:text-white">Vos droits conservés à 100%</h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">Vous êtes l'unique propriétaire de vos œuvres.</p>
+                <h5 className="text-xs font-bold text-slate-900 dark:text-white">Mobile Money & Cartes</h5>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Wave, Orange, MTN, Moov, Visa &amp; Mastercard.</p>
               </div>
             </div>
 
@@ -781,8 +782,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <Star className="w-5 h-5" />
               </div>
               <div>
-                <h5 className="text-xs font-bold text-slate-900 dark:text-white">Paiement sécurisé</h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">Carte bancaire, Mobile Money &amp; Apple Pay.</p>
+                <h5 className="text-xs font-bold text-slate-900 dark:text-white">Validation immédiate</h5>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Déblocage instantané de vos fonctionnalités.</p>
               </div>
             </div>
           </div>

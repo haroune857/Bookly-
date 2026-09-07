@@ -1,55 +1,31 @@
 import React, { useState, useMemo } from 'react';
 import {
+  TrendingUp,
   Users,
   Cpu,
-  Award,
-  AlertOctagon,
-  Settings,
-  TrendingUp,
-  Activity,
   DollarSign,
-  Search,
-  Filter,
-  Plus,
-  Edit2,
-  Trash2,
-  Lock,
-  Unlock,
-  CheckCircle2,
-  XCircle,
-  ExternalLink,
-  Shield,
-  Clock,
-  Sparkles,
-  BarChart3,
   Sliders,
+  Search,
+  CheckCircle,
+  AlertTriangle,
   RefreshCw,
-  Eye,
+  Lock,
   Zap,
-  Globe,
-  Radio,
-  FileText,
-  MousePointerClick,
-  Database,
   ArrowUpRight,
-  Info,
+  ShieldCheck,
+  Ban,
+  Activity,
   CreditCard,
-  ShoppingBag,
-  Truck,
-  PackageCheck,
-  Wallet,
-  ArrowDownRight,
-  Layers,
-  Percent,
   Download,
-  Calendar
+  Calendar,
+  Layers,
+  Sparkles,
+  BarChart3
 } from 'lucide-react';
 import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
@@ -59,39 +35,28 @@ import {
   Legend,
   PieChart,
   Pie,
-  Cell,
-  ComposedChart
+  Cell
 } from 'recharts';
 import {
   AdminUser,
   AdminApiDailyStat,
-  AdminAffiliateCourse,
   AdminErrorLog,
   AdminGlobalConfig,
-  TrainingCourse,
-  AdminSubscriptionRevenueStat,
-  AdminChariotDeliveryRevenueStat
+  AdminSubscriptionRevenueStat
 } from '../types';
-import {
-  INITIAL_SUBSCRIPTION_REVENUE_STATS,
-  INITIAL_CHARIOT_DELIVERY_REVENUE_STATS
-} from '../data/adminData';
+import { INITIAL_SUBSCRIPTION_REVENUE_STATS } from '../data/adminData';
 
 interface AdminDashboardViewProps {
   users: AdminUser[];
   onUpdateUsers: (users: AdminUser[]) => void;
   apiStats: AdminApiDailyStat[];
   subscriptionRevenueStats?: AdminSubscriptionRevenueStat[];
-  chariotDeliveryRevenueStats?: AdminChariotDeliveryRevenueStat[];
-  affiliateCourses: AdminAffiliateCourse[];
-  onUpdateAffiliateCourses: (courses: AdminAffiliateCourse[]) => void;
   errorLogs: AdminErrorLog[];
   onUpdateErrorLogs: (logs: AdminErrorLog[]) => void;
   globalConfig: AdminGlobalConfig;
   onUpdateGlobalConfig: (config: AdminGlobalConfig) => void;
   onLockAdmin: () => void;
   onShowToast: (title: string, message: string, type?: 'success' | 'error' | 'info') => void;
-  onSyncWithTrainingCatalog?: (courses: TrainingCourse[]) => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -99,9 +64,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onUpdateUsers,
   apiStats,
   subscriptionRevenueStats = INITIAL_SUBSCRIPTION_REVENUE_STATS,
-  chariotDeliveryRevenueStats = INITIAL_CHARIOT_DELIVERY_REVENUE_STATS,
-  affiliateCourses,
-  onUpdateAffiliateCourses,
   errorLogs,
   onUpdateErrorLogs,
   globalConfig,
@@ -109,47 +71,82 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onLockAdmin,
   onShowToast
 }) => {
-  // Navigation tabs
-  type AdminTab = 'kpis' | 'finances' | 'users' | 'api' | 'affiliate' | 'settings_logs';
-  const [activeTab, setActiveTab] = useState<AdminTab>('kpis');
+  // Navigation tabs: 'kpis' | 'finances' | 'users' | 'api' | 'settings_logs'
+  const [activeTab, setActiveTab] = useState<'kpis' | 'finances' | 'users' | 'api' | 'settings_logs'>('kpis');
 
-  // Finances view filter & mode
-  const [financeTimeframe, setFinanceTimeframe] = useState<'14d' | '30d' | 'all'>('14d');
-  const [revenueFocusMode, setRevenueFocusMode] = useState<'both' | 'subscriptions' | 'chariot'>('both');
-
-  // User Management filters & selection
+  // Filter & Search states
   const [userSearch, setUserSearch] = useState('');
   const [userPlanFilter, setUserPlanFilter] = useState<'all' | 'free' | 'pro' | 'premium' | 'blocked'>('all');
-  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
-  // Affiliate Course Form state
-  const [isAddingCourse, setIsAddingCourse] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<AdminAffiliateCourse | null>(null);
-  const [courseForm, setCourseForm] = useState<Partial<AdminAffiliateCourse>>({
-    title: '',
-    author: '',
-    description: '',
-    affiliateUrl: '',
-    targetAudience: 'all',
-    price: 49,
-    commissionRate: 40,
-    category: 'Édition & Créativité',
-    coverGradient: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-    isActive: true
-  });
+  // Compute real KPIs (zero-based factory metrics)
+  const kpiData = useMemo(() => {
+    const totalUsers = users.length;
+    const freeCount = users.filter((u) => u.plan === 'free').length;
+    const proCount = users.filter((u) => u.plan === 'pro').length;
+    const premiumCount = users.filter((u) => u.plan === 'premium').length;
+    const paidCount = proCount + premiumCount;
+    const blockedCount = users.filter((u) => u.status === 'blocked').length;
 
-  // Global config editing draft
-  const [configDraft, setConfigDraft] = useState<AdminGlobalConfig>(globalConfig);
+    const totalWords = users.reduce((acc, u) => acc + (u.totalWordsGenerated || 0), 0);
+    const totalProjects = users.reduce((acc, u) => acc + (u.lifetimeProjects || 0), 0);
 
-  // Filtered Users computation
+    // AI Token metrics (strictly token count, no monetary cost)
+    const totalTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.totalTokens || 0), 0);
+    const groqTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.groqTokens || 0), 0);
+    const geminiTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.geminiTokens || 0), 0);
+    const inputTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.inputTokens || 0), 0);
+    const outputTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.outputTokens || 0), 0);
+    const totalRequestsMonth = apiStats.reduce((acc, stat) => acc + (stat.requestsCount || 0), 0);
+
+    // Saspay SaaS subscription metrics (in FCFA)
+    const totalSaspayRevenue = subscriptionRevenueStats.reduce((acc, s) => acc + (s.totalSubscriptionRevenue || 0), 0);
+    const proSaspayRevenue = subscriptionRevenueStats.reduce((acc, s) => acc + (s.proRevenue || 0), 0);
+    const premiumSaspayRevenue = subscriptionRevenueStats.reduce((acc, s) => acc + (s.premiumRevenue || 0), 0);
+    const totalNewSubs = subscriptionRevenueStats.reduce((acc, s) => acc + (s.newSubscriptionsCount || 0), 0);
+    const totalRenewals = subscriptionRevenueStats.reduce((acc, s) => acc + (s.renewalsCount || 0), 0);
+    const totalChurn = subscriptionRevenueStats.reduce((acc, s) => acc + (s.churnCount || 0), 0);
+
+    // Monthly Recurring Revenue (MRR) based on active paid subscribers
+    // Pro: 19 000 FCFA/mois, Premium: 32 000 FCFA/mois
+    const calculatedMRR = (proCount * 19000) + (premiumCount * 32000) + totalSaspayRevenue;
+    const calculatedARR = calculatedMRR * 12;
+
+    return {
+      totalUsers,
+      freeCount,
+      proCount,
+      premiumCount,
+      paidCount,
+      blockedCount,
+      totalWords,
+      totalProjects,
+      totalTokensMonth,
+      groqTokensMonth,
+      geminiTokensMonth,
+      inputTokensMonth,
+      outputTokensMonth,
+      totalRequestsMonth,
+      totalSaspayRevenue,
+      proSaspayRevenue,
+      premiumSaspayRevenue,
+      totalNewSubs,
+      totalRenewals,
+      totalChurn,
+      mrr: calculatedMRR,
+      arr: calculatedARR
+    };
+  }, [users, apiStats, subscriptionRevenueStats]);
+
+  // Filtered users list
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const matchesSearch =
         u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearch.toLowerCase());
-      
-      if (!matchesSearch) return false;
+        u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.id.toLowerCase().includes(userSearch.toLowerCase());
 
+      if (!matchesSearch) return false;
       if (userPlanFilter === 'blocked') return u.status === 'blocked';
       if (userPlanFilter === 'free') return u.plan === 'free';
       if (userPlanFilter === 'pro') return u.plan === 'pro';
@@ -158,308 +155,120 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     });
   }, [users, userSearch, userPlanFilter]);
 
-  // Overall Financials & KPIs computation
-  const kpiData = useMemo(() => {
-    const totalUsers = users.length;
-    const freeCount = users.filter((u) => u.plan === 'free').length;
-    const paidCount = users.filter((u) => u.plan === 'pro' || u.plan === 'premium').length;
-    const blockedCount = users.filter((u) => u.status === 'blocked').length;
-    
-    const totalWords = users.reduce((acc, u) => acc + (u.totalWordsGenerated || 0), 0);
-    const totalProjects = users.reduce((acc, u) => acc + (u.lifetimeProjects || 0), 0);
-    
-    const totalTokensMonth = apiStats.reduce((acc, stat) => acc + stat.totalTokens, 0);
-    const totalCostMonth = apiStats.reduce((acc, stat) => acc + stat.estimatedCost, 0);
-    const totalRequestsMonth = apiStats.reduce((acc, stat) => acc + stat.requestsCount, 0);
-
-    // Subscription calculations
-    const totalSubscriptionRevenuePeriod = subscriptionRevenueStats.reduce((acc, s) => acc + s.totalSubscriptionRevenue, 0);
-    const totalProRevenuePeriod = subscriptionRevenueStats.reduce((acc, s) => acc + s.proRevenue, 0);
-    const totalPremiumRevenuePeriod = subscriptionRevenueStats.reduce((acc, s) => acc + s.premiumRevenue, 0);
-    const totalNewSubsPeriod = subscriptionRevenueStats.reduce((acc, s) => acc + s.newSubscriptionsCount, 0);
-    const totalRenewalsPeriod = subscriptionRevenueStats.reduce((acc, s) => acc + s.renewalsCount, 0);
-    const totalChurnPeriod = subscriptionRevenueStats.reduce((acc, s) => acc + s.churnCount, 0);
-    const estimatedMRR = Math.round(totalSubscriptionRevenuePeriod * 2.14); // Projection mensuelle MRR
-    const estimatedARR = estimatedMRR * 12;
-
-    // Chariot Delivery calculations
-    const totalChariotGMVPeriod = chariotDeliveryRevenueStats.reduce((acc, s) => acc + s.grossMerchandiseValue, 0);
-    const totalChariotCommissionsPeriod = chariotDeliveryRevenueStats.reduce((acc, s) => acc + s.commissionsEarned, 0);
-    const totalChariotOrdersPeriod = chariotDeliveryRevenueStats.reduce((acc, s) => acc + s.ordersDeliveredCount, 0);
-    const avgChariotCart = totalChariotOrdersPeriod > 0 ? (totalChariotGMVPeriod / totalChariotOrdersPeriod) : 64.50;
-    const avgCommissionRate = totalChariotGMVPeriod > 0 ? ((totalChariotCommissionsPeriod / totalChariotGMVPeriod) * 100) : 43.5;
-
-    // Affiliate catalog counters
-    const totalAffiliateClicks = affiliateCourses.reduce((acc, c) => acc + (c.clicksCount || 0), 0);
-    const totalAffiliateConversions = affiliateCourses.reduce((acc, c) => acc + (c.conversionsCount || 0), 0);
-
-    // Combined Gross & Net Revenues
-    const totalCombinedIncome = totalSubscriptionRevenuePeriod + totalChariotCommissionsPeriod;
-    const netProfitEstimated = totalCombinedIncome - totalCostMonth;
-
-    return {
-      totalUsers: totalUsers * 245 + 18, // Scaling for realistic representation
-      activeUsersToday: 412,
-      activeUsersMonth: 1890,
-      freeCount,
-      paidCount,
-      blockedCount,
-      totalWords: totalWords + 2450000,
-      totalProjects: totalProjects + 1240,
-      totalTokensMonth,
-      totalCostMonth,
-      totalRequestsMonth,
-      // Subscriptions
-      totalSubscriptionRevenuePeriod,
-      totalProRevenuePeriod,
-      totalPremiumRevenuePeriod,
-      totalNewSubsPeriod,
-      totalRenewalsPeriod,
-      totalChurnPeriod,
-      estimatedMRR,
-      estimatedARR,
-      // Chariot
-      totalChariotGMVPeriod,
-      totalChariotCommissionsPeriod,
-      totalChariotOrdersPeriod,
-      avgChariotCart,
-      avgCommissionRate,
-      totalAffiliateClicks,
-      totalAffiliateConversions,
-      // Global
-      totalCombinedIncome,
-      netProfitEstimated
-    };
-  }, [users, apiStats, subscriptionRevenueStats, chariotDeliveryRevenueStats, affiliateCourses]);
-
-  // Combined Chart Dataset for Multi-source analysis
-  const combinedFinanceChartData = useMemo(() => {
-    return subscriptionRevenueStats.map((sub, idx) => {
-      const chariot = chariotDeliveryRevenueStats[idx] || {
-        grossMerchandiseValue: 0,
-        commissionsEarned: 0,
-        ordersDeliveredCount: 0,
-        averageCartValue: 0,
-        topCourseTitle: ''
-      };
-      return {
-        date: sub.dayLabel,
-        fullDate: sub.date,
-        // Subscriptions series
-        revenuAbonnements: sub.totalSubscriptionRevenue,
-        revenuPro: sub.proRevenue,
-        revenuPremium: sub.premiumRevenue,
-        nouvellesSouscriptions: sub.newSubscriptionsCount,
-        renouvellements: sub.renewalsCount,
-        desabonnements: sub.churnCount,
-        // Chariot series
-        volumeBrutChariot: chariot.grossMerchandiseValue,
-        commissionsChariot: chariot.commissionsEarned,
-        commandesLivrees: chariot.ordersDeliveredCount,
-        panierMoyenChariot: chariot.averageCartValue,
-        topCours: chariot.topCourseTitle,
-        // Totals
-        totalRevenusJour: sub.totalSubscriptionRevenue + chariot.commissionsEarned
-      };
-    });
-  }, [subscriptionRevenueStats, chariotDeliveryRevenueStats]);
-
-  // Chart data: User Growth & Generation Volume
-  const userActivityChartData = useMemo(() => {
-    return apiStats.map((stat) => ({
-      date: stat.dayLabel,
-      utilisateursActifs: Math.round(stat.requestsCount * 0.45) + 120,
-      fluxMots: Math.round(stat.outputTokens * 0.75),
-      requetesIA: stat.requestsCount
-    }));
-  }, [apiStats]);
-
-  // Handle User Moderation: Toggle Block
-  const handleToggleUserBlock = (userId: string) => {
+  // Actions on users
+  const handleChangeUserPlan = (userId: string, newPlan: 'free' | 'pro' | 'premium') => {
     const updated = users.map((u) => {
       if (u.id === userId) {
-        const nextStatus = u.status === 'blocked' ? ('active' as const) : ('blocked' as const);
-        return { ...u, status: nextStatus };
+        return {
+          ...u,
+          plan: newPlan,
+          dailyPromptsLimit:
+            newPlan === 'free'
+              ? globalConfig.freeDailyPromptLimit
+              : newPlan === 'pro'
+              ? globalConfig.proDailyPromptLimit
+              : globalConfig.premiumDailyPromptLimit
+        };
       }
       return u;
     });
     onUpdateUsers(updated);
-    const target = users.find((u) => u.id === userId);
-    if (target?.status === 'active') {
-      onShowToast('Compte Bloqué', `L'accès de ${target.name} a été suspendu.`, 'info');
-    } else {
-      onShowToast('Compte Réactivé', `L'accès de ${target?.name} a été rétabli.`, 'success');
-    }
+    onShowToast('Plan mis à jour', `Le forfait de l'utilisateur est maintenant ${newPlan.toUpperCase()}.`, 'success');
   };
 
-  // Handle User Edit Quotas & Plan
-  const handleSaveUserEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    const updated = users.map((u) => (u.id === editingUser.id ? editingUser : u));
-    onUpdateUsers(updated);
-    setEditingUser(null);
-    onShowToast('Modifications Enregistrées', `Les quotas et le statut de ${editingUser.name} ont été mis à jour.`, 'success');
-  };
-
-  // Handle Affiliate Course Actions
-  const handleSaveAffiliateCourse = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!courseForm.title || !courseForm.affiliateUrl) {
-      onShowToast('Erreur', 'Veuillez renseigner au minimum le titre et le lien d\'affiliation.', 'error');
-      return;
-    }
-
-    if (editingCourse) {
-      // Update
-      const updated = affiliateCourses.map((c) =>
-        c.id === editingCourse.id ? ({ ...c, ...courseForm } as AdminAffiliateCourse) : c
-      );
-      onUpdateAffiliateCourses(updated);
-      onShowToast('Formation Mise à Jour', `"${courseForm.title}" a été modifiée avec succès.`, 'success');
-    } else {
-      // Create
-      const newCourse: AdminAffiliateCourse = {
-        id: `aff-${Date.now()}`,
-        title: courseForm.title || 'Nouvelle Formation',
-        author: courseForm.author || 'Partenaire Chariot',
-        description: courseForm.description || '',
-        affiliateUrl: courseForm.affiliateUrl || '',
-        targetAudience: courseForm.targetAudience || 'all',
-        price: Number(courseForm.price) || 49,
-        commissionRate: Number(courseForm.commissionRate) || 40,
-        category: courseForm.category || 'Édition & Créativité',
-        coverGradient: courseForm.coverGradient || 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-        clicksCount: 0,
-        conversionsCount: 0,
-        isActive: true,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      onUpdateAffiliateCourses([newCourse, ...affiliateCourses]);
-      onShowToast('Formation Ajoutée', `La formation affiliée "${newCourse.title}" est maintenant active.`, 'success');
-    }
-
-    setIsAddingCourse(false);
-    setEditingCourse(null);
-    setCourseForm({
-      title: '',
-      author: '',
-      description: '',
-      affiliateUrl: '',
-      targetAudience: 'all',
-      price: 49,
-      commissionRate: 40,
-      category: 'Édition & Créativité',
-      coverGradient: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-      isActive: true
+  const handleResetUserCounters = (userId: string) => {
+    const updated = users.map((u) => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          dailyPromptsUsed: 0,
+          totalWordsGenerated: 0,
+          lifetimeProjects: 0
+        };
+      }
+      return u;
     });
+    onUpdateUsers(updated);
+    onShowToast('Compteurs Réinitialisés', 'Les compteurs de l\'utilisateur ont été remis à zéro.', 'info');
   };
 
-  const handleToggleCourseStatus = (courseId: string) => {
-    const updated = affiliateCourses.map((c) =>
-      c.id === courseId ? { ...c, isActive: !c.isActive } : c
+  const handleToggleBlockUser = (userId: string) => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return;
+    const newStatus: 'active' | 'blocked' = target.status === 'blocked' ? 'active' : 'blocked';
+    const updated = users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
+    onUpdateUsers(updated);
+    onShowToast(
+      newStatus === 'blocked' ? 'Utilisateur Bloqué' : 'Utilisateur Débloqué',
+      `L'accès a été mis à jour pour ${target.name}.`,
+      newStatus === 'blocked' ? 'error' : 'success'
     );
-    onUpdateAffiliateCourses(updated);
-    onShowToast('Statut Modifié', 'La visibilité de la formation a été mise à jour.', 'info');
   };
 
-  const handleDeleteCourse = (courseId: string) => {
-    const target = affiliateCourses.find((c) => c.id === courseId);
-    const updated = affiliateCourses.filter((c) => c.id !== courseId);
-    onUpdateAffiliateCourses(updated);
-    onShowToast('Formation Supprimée', `"${target?.title}" a été retirée du catalogue affilié.`, 'info');
-  };
-
-  const handleSimulateAffiliateClick = (courseId: string) => {
-    const updated = affiliateCourses.map((c) =>
-      c.id === courseId ? { ...c, clicksCount: c.clicksCount + 1 } : c
-    );
-    onUpdateAffiliateCourses(updated);
-    onShowToast('Test Lien Chariot', 'Redirection d\'affiliation simulée (+1 clic enregistré).', 'info');
-  };
-
-  // Handle Save Global Config
-  const handleSaveGlobalConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdateGlobalConfig(configDraft);
-    onShowToast('Configuration Appliquée', 'Les règles globales de l\'application ont été enregistrées sans redéploiement.', 'success');
-  };
-
-  // Handle Error Logs: Toggle Resolve
-  const handleToggleResolveLog = (logId: string) => {
-    const updated = errorLogs.map((log) =>
-      log.id === logId ? { ...log, resolved: !log.resolved } : log
-    );
-    onUpdateErrorLogs(updated);
-    onShowToast('Journal Mis à Jour', 'Le statut de l\'incident a été actualisé.', 'info');
-  };
-
-  const handleClearLogs = () => {
-    onUpdateErrorLogs([]);
-    onShowToast('Logs Purgés', 'L\'historique des erreurs a été réinitialisé.', 'info');
-  };
-
-  const handleExportFinancialReport = () => {
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + "Date,Revenu_Abonnements_EUR,Abonnements_Pro_EUR,Abonnements_Premium_EUR,Nouvelles_Souscriptions,Volume_Brut_Chariot_EUR,Commissions_Chariot_EUR,Commandes_Chariot_Livrees,Panier_Moyen_EUR,Top_Formation\n"
-      + combinedFinanceChartData.map(e => `${e.fullDate},${e.revenuAbonnements},${e.revenuPro},${e.revenuPremium},${e.nouvellesSouscriptions},${e.volumeBrutChariot},${e.commissionsChariot},${e.commandesLivrees},${e.panierMoyenChariot},"${e.topCours}"`).join("\n");
-    
+  // Export Saspay Financial Report
+  const handleExportSaspayReport = () => {
+    const headers = ['Date', 'Jour', 'Abonnements Pro (FCFA)', 'Abonnements Premium (FCFA)', 'Revenus Saspay Totaux (FCFA)', 'Nouveaux Abonnés'];
+    const rows = subscriptionRevenueStats.map((s) => [
+      s.date,
+      s.dayLabel,
+      s.proRevenue,
+      s.premiumRevenue,
+      s.totalSubscriptionRevenue,
+      s.newSubscriptionsCount
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `rapport_financier_bookly_${new Date().toISOString().split('T')[0]}.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `bookly_saspay_revenus_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    onShowToast('Export Réussi', 'Le grand livre financier CSV (Abonnements & Chariot) a été téléchargé.', 'success');
+    onShowToast('Export Réussi', 'Le rapport des revenus SaaS Saspay a été téléchargé.', 'success');
   };
 
   return (
-    <div id="admin-dashboard-root" className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8 font-sans transition-colors">
       
-      {/* ------------------------------------------------------------- */}
-      {/* ADMIN HEADER & ACCREDITATION BANNER */}
-      {/* ------------------------------------------------------------- */}
-      <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-xl relative overflow-hidden">
-        {/* Subtle background glow */}
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
+      {/* ============================================================= */}
+      {/* HEADER PRINCIPAL AVEC STATUT DU SYSTÈME & ACTIONS GLOBALES */}
+      {/* ============================================================= */}
+      <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 mb-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-indigo-400" />
-                Console d'Administration &bull; Super Admin
-              </div>
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-full">
-                <Radio className="w-3 h-3 animate-pulse" /> Passerelle Financière & API Opérationnelles
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                Console de Contrôle Master
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Moteurs IA en Ligne (Groq & Gemini)
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Tableau de Bord Administrateur
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              Administration Bookly Studio
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Pilotez les revenus générés par les abonnements SaaS, les commissions de livraison Chariot, suivez l'activité des membres et supervisez la consommation API Groq en temps réel.
+            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
+              Supervision des abonnements SaaS Saspay, consommation des tokens IA, et gestion des auteurs.
             </p>
           </div>
 
-          {/* Quick Admin Actions */}
-          <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto flex-wrap">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={handleExportFinancialReport}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 border border-emerald-500/30 transition-colors shadow-sm"
-              title="Exporter le rapport financier complet (CSV)"
+              onClick={handleExportSaspayReport}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 border border-emerald-500/30 transition-colors shadow-xs"
+              title="Exporter le rapport des revenus Saspay"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Exporter Trésorerie</span>
+              <span>Exporter Saspay (CSV)</span>
             </button>
 
             <button
-              onClick={() => onShowToast('Données Synchronisées', 'Toutes les métriques de revenus et d\'activité ont été recalculées.', 'info')}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition-colors"
-              title="Rafraîchir les métriques"
+              onClick={() => onShowToast('Données Synchronisées', 'Les métriques de tokens et revenus ont été actualisées.', 'info')}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Actualiser</span>
@@ -467,8 +276,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             <button
               onClick={onLockAdmin}
-              className="px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold flex items-center gap-2 border border-red-500/30 transition-colors shadow-sm"
-              title="Verrouiller la session administrateur"
+              className="px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold flex items-center gap-2 border border-red-500/30 transition-colors shadow-xs"
             >
               <Lock className="w-3.5 h-3.5" />
               <span>Verrouiller</span>
@@ -477,88 +285,88 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* SECTION 1 : HIGHLIGHT FINANCIAL & OPERATIONAL SUMMARY BAR */}
+        {/* SUMMARY BAR : 5 CARTES CLÉS */}
         {/* ------------------------------------------------------------- */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mt-6 pt-6 border-t border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-6 pt-6 border-t border-slate-800">
           
-          {/* Card 1: MRR Abonnements */}
-          <div className="bg-slate-800/60 backdrop-blur-xs p-3.5 rounded-2xl border border-indigo-500/30 shadow-xs relative overflow-hidden">
+          {/* Card 1: Revenus SaaS Saspay */}
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-indigo-500/30">
             <div className="text-[11px] text-indigo-300 font-semibold flex items-center justify-between">
-              <span>MRR Abonnements (SaaS)</span>
+              <span>Revenus SaaS Saspay</span>
               <CreditCard className="w-4 h-4 text-indigo-400" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-1">
-              {kpiData.estimatedMRR.toLocaleString('fr-FR')} € <span className="text-xs font-normal text-slate-400">/ mois</span>
+            <div className="text-lg sm:text-xl font-black text-white mt-1">
+              {kpiData.totalSaspayRevenue.toLocaleString('fr-FR')} <span className="text-xs font-normal text-slate-400">FCFA</span>
             </div>
             <div className="text-[10px] text-emerald-400 flex items-center gap-1 mt-0.5 font-medium">
-              <TrendingUp className="w-3 h-3" /> ARR : {kpiData.estimatedARR.toLocaleString('fr-FR')} €
+              <TrendingUp className="w-3 h-3" /> MRR : {kpiData.mrr.toLocaleString('fr-FR')} FCFA
             </div>
           </div>
 
-          {/* Card 2: Commissions Livraison Chariot */}
-          <div className="bg-slate-800/60 backdrop-blur-xs p-3.5 rounded-2xl border border-emerald-500/30 shadow-xs">
+          {/* Card 2: Abonnés Payants (Pro & Premium) */}
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-emerald-500/30">
             <div className="text-[11px] text-emerald-300 font-semibold flex items-center justify-between">
-              <span>Commissions Chariot</span>
-              <Truck className="w-4 h-4 text-emerald-400" />
+              <span>Abonnés Payants</span>
+              <DollarSign className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
-              {kpiData.totalChariotCommissionsPeriod.toLocaleString('fr-FR')} €
+            <div className="text-lg sm:text-xl font-black text-emerald-400 mt-1">
+              {kpiData.paidCount} <span className="text-xs font-normal text-slate-400">actifs</span>
             </div>
             <div className="text-[10px] text-slate-300 flex items-center gap-1 mt-0.5 font-medium">
-              <span>GMV Brut : {kpiData.totalChariotGMVPeriod.toLocaleString('fr-FR')} €</span>
+              <span>{kpiData.proCount} Pro • {kpiData.premiumCount} Premium</span>
             </div>
           </div>
 
-          {/* Card 3: Total Membres */}
-          <div className="bg-slate-800/60 backdrop-blur-xs p-3.5 rounded-2xl border border-slate-700/60">
+          {/* Card 3: Total Auteurs / Membres */}
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
             <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
-              <span>Membres Inscrits</span>
+              <span>Auteurs & Membres</span>
               <Users className="w-4 h-4 text-indigo-400" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-1">
-              {kpiData.totalUsers.toLocaleString('fr-FR')}
+            <div className="text-lg sm:text-xl font-black text-white mt-1">
+              {kpiData.totalUsers}
             </div>
-            <div className="text-[10px] text-emerald-400 flex items-center gap-1 mt-0.5 font-medium">
-              <TrendingUp className="w-3 h-3" /> {kpiData.activeUsersToday} actifs / jour
+            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
+              <span>{kpiData.freeCount} Forfait Gratuit</span>
             </div>
           </div>
 
-          {/* Card 4: Activité Flux Mots */}
-          <div className="bg-slate-800/60 backdrop-blur-xs p-3.5 rounded-2xl border border-slate-700/60">
+          {/* Card 4: Volume Rédaction */}
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
             <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
-              <span>Volume Rédaction (Flux)</span>
+              <span>Volume Rédaction</span>
               <Zap className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-1">
-              {(kpiData.totalWords / 1000000).toFixed(2)}M <span className="text-xs font-normal text-slate-400">mots</span>
+            <div className="text-lg sm:text-xl font-black text-white mt-1">
+              {kpiData.totalWords.toLocaleString('fr-FR')} <span className="text-xs font-normal text-slate-400">mots</span>
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
-              {kpiData.totalProjects.toLocaleString('fr-FR')} livres & manuscrits
+              {kpiData.totalProjects} livres & manuscrits
             </div>
           </div>
 
-          {/* Card 5: Coût API / Budget */}
-          <div className="bg-slate-800/60 backdrop-blur-xs p-3.5 rounded-2xl border border-slate-700/60 col-span-2 lg:col-span-1">
+          {/* Card 5: Utilisation des Tokens IA (Strictly Tokens) */}
+          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60 col-span-2 sm:col-span-1">
             <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
-              <span>Coût API Groq / Budget</span>
-              <Cpu className="w-4 h-4 text-violet-400" />
+              <span>Tokens IA Consommés</span>
+              <Cpu className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-1">
-              {kpiData.totalCostMonth.toFixed(2)} € <span className="text-xs font-normal text-slate-400">/ {globalConfig.monthlyApiBudgetLimit} €</span>
+            <div className="text-lg sm:text-xl font-black text-purple-300 mt-1">
+              {kpiData.totalTokensMonth.toLocaleString('fr-FR')} <span className="text-xs font-normal text-slate-400">tokens</span>
             </div>
-            <div className="text-[10px] text-emerald-400 mt-0.5 font-medium">
-              {((kpiData.totalCostMonth / globalConfig.monthlyApiBudgetLimit) * 100).toFixed(1)}% du budget utilisé
+            <div className="text-[10px] text-purple-400 mt-0.5 font-medium">
+              {kpiData.totalRequestsMonth} requêtes IA totales
             </div>
           </div>
+
         </div>
       </div>
 
-      {/* ------------------------------------------------------------- */}
+      {/* ============================================================= */}
       {/* NAVIGATION TABS SELECTOR */}
-      {/* ------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-slate-200 dark:border-slate-800">
+      {/* ============================================================= */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none border-b border-slate-200 dark:border-slate-800">
         <button
-          id="tab-btn-kpis"
           onClick={() => setActiveTab('kpis')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'kpis'
@@ -571,7 +379,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </button>
 
         <button
-          id="tab-btn-finances"
           onClick={() => setActiveTab('finances')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'finances'
@@ -580,11 +387,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           }`}
         >
           <DollarSign className="w-4 h-4" />
-          <span>2. Revenus & Trésorerie (Abonnements & Chariot)</span>
+          <span>2. Revenus SaaS Saspay</span>
         </button>
 
         <button
-          id="tab-btn-users"
           onClick={() => setActiveTab('users')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'users'
@@ -597,33 +403,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </button>
 
         <button
-          id="tab-btn-api"
           onClick={() => setActiveTab('api')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'api'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <Cpu className="w-4 h-4" />
-          <span>4. Suivi API Groq & Coûts</span>
+          <span>4. Utilisation des Tokens IA</span>
         </button>
 
         <button
-          id="tab-btn-affiliate"
-          onClick={() => setActiveTab('affiliate')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
-            activeTab === 'affiliate'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Award className="w-4 h-4" />
-          <span>5. Affiliation Formations (Chariot)</span>
-        </button>
-
-        <button
-          id="tab-btn-settings"
           onClick={() => setActiveTab('settings_logs')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'settings_logs'
@@ -632,330 +423,54 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>6. Journal d'Erreurs & Paramètres Globaux</span>
+          <span>5. Journal Système & Paramètres Globaux</span>
         </button>
       </div>
 
       {/* ============================================================= */}
-      {/* TAB 1: INDICATEURS CLÉS (KPIS) AVEC LES DEUX GRAPHIQUES DE REVENUS */}
+      {/* TAB 1: KPIS & APERÇU GÉNÉRAL */}
       {/* ============================================================= */}
       {activeTab === 'kpis' && (
-        <div className="space-y-8 animate-in fade-in duration-200">
+        <div className="space-y-6 animate-in fade-in">
           
-          {/* ------------------------------------------------------------- */}
-          {/* SECTION SPÉCIFIQUE : LES DEUX GRAPHIQUES DISTINCTS DE REVENUS */}
-          {/* ------------------------------------------------------------- */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-900/40 via-purple-900/30 to-emerald-900/40 p-4 sm:p-5 rounded-2xl border border-indigo-200/40 dark:border-indigo-800/40">
-              <div>
-                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs uppercase tracking-wider">
-                  <DollarSign className="w-4 h-4 text-emerald-500" />
-                  Flux de Trésorerie & Monétisation
-                </div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
-                  Revenus des Abonnements et de la Livraison Chariot
-                </h2>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Visualisation séparée et comparative des deux moteurs de croissance financière de Bookly Studio.
-                </p>
-              </div>
-
-              <button
-                onClick={() => setActiveTab('finances')}
-                className="self-start sm:self-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all shrink-0"
-              >
-                <span>Accéder au Grand Livre Trésorerie</span>
-                <ArrowUpRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* GRID DES DEUX GRAPHIQUES DISTINCTS */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* ------------------------------------------------------------- */}
-              {/* GRAPHIQUE 1 : REVENUS ISSUS DES ABONNEMENTS */}
-              {/* ------------------------------------------------------------- */}
-              <div id="chart-subscription-revenue" className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                          <CreditCard className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                            1. Revenus Issus des Abonnements
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Revenus récurrents journaliers (Forfaits Pro 29€ & Premium 49€)
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                        {kpiData.totalSubscriptionRevenuePeriod.toLocaleString('fr-FR')} €
-                      </div>
-                      <span className="text-[10px] font-semibold text-slate-400">sur 14 jours</span>
-                    </div>
-                  </div>
-
-                  {/* Badges Metrics Subscriptions */}
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="p-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">MRR Actuel</div>
-                      <div className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
-                        {kpiData.estimatedMRR.toLocaleString('fr-FR')} €
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Nouveaux Abonnés</div>
-                      <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5 flex items-center gap-1">
-                        <span className="text-emerald-500">+{kpiData.totalNewSubsPeriod}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">/ 14j</span>
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Rétention / Churn</div>
-                      <div className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        97.6% <span className="text-[10px] text-slate-400 font-normal">fidèles</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Graphique Abonnements */}
-                  <div className="h-64 sm:h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={combinedFinanceChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorSubTotal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.45} />
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                          </linearGradient>
-                          <linearGradient id="colorSubPro" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
-                          </linearGradient>
-                          <linearGradient id="colorSubPrem" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} unit="€" />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#0f172a',
-                            borderColor: '#334155',
-                            borderRadius: '12px',
-                            color: '#fff',
-                            fontSize: '12px'
-                          }}
-                          formatter={(val: any, name: any) => [`${val} €`, name]}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                        <Area
-                          type="monotone"
-                          dataKey="revenuAbonnements"
-                          name="Total Abonnements (€)"
-                          stroke="#6366f1"
-                          strokeWidth={3}
-                          fillOpacity={1}
-                          fill="url(#colorSubTotal)"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="revenuPro"
-                          name="Formules Pro (29€)"
-                          stroke="#3b82f6"
-                          strokeWidth={1.8}
-                          fillOpacity={1}
-                          fill="url(#colorSubPro)"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="revenuPremium"
-                          name="Formules Premium (49€)"
-                          stroke="#8b5cf6"
-                          strokeWidth={1.8}
-                          fillOpacity={1}
-                          fill="url(#colorSubPrem)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Prélèvements Stripe & CB synchronisés
-                  </span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    ARR : {kpiData.estimatedARR.toLocaleString('fr-FR')} €
-                  </span>
-                </div>
-              </div>
-
-              {/* ------------------------------------------------------------- */}
-              {/* GRAPHIQUE 2 : REVENUS ISSUS DE LA LIVRAISON CHARIOT */}
-              {/* ------------------------------------------------------------- */}
-              <div id="chart-chariot-revenue" className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          <Truck className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                            2. Revenus Issus de la Livraison Chariot
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Commissions perçues & volume brut livré des formations affiliées
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                        {kpiData.totalChariotCommissionsPeriod.toLocaleString('fr-FR')} €
-                      </div>
-                      <span className="text-[10px] font-semibold text-slate-400">commissions perçues</span>
-                    </div>
-                  </div>
-
-                  {/* Badges Metrics Chariot */}
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="p-2.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Volume Brut (GMV)</div>
-                      <div className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        {kpiData.totalChariotGMVPeriod.toLocaleString('fr-FR')} €
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Commandes Livrées</div>
-                      <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-                        {kpiData.totalChariotOrdersPeriod} <span className="text-[10px] text-slate-400 font-normal">cours</span>
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Panier Moyen</div>
-                      <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-                        {kpiData.avgChariotCart.toFixed(2)} €
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Graphique Chariot */}
-                  <div className="h-64 sm:h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={combinedFinanceChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorChariotComm" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} unit="€" />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#0f172a',
-                            borderColor: '#334155',
-                            borderRadius: '12px',
-                            color: '#fff',
-                            fontSize: '12px'
-                          }}
-                          formatter={(val: any, name: any) => {
-                            if (name === 'Commandes Livrées') return [`${val} commandes`, name];
-                            return [`${val} €`, name];
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                        <Bar
-                          dataKey="volumeBrutChariot"
-                          name="Volume Brut Livré GMV (€)"
-                          fill="#0284c7"
-                          radius={[6, 6, 0, 0]}
-                          barSize={16}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="commissionsChariot"
-                          name="Commissions Perçues (€)"
-                          stroke="#10b981"
-                          strokeWidth={2.5}
-                          fillOpacity={1}
-                          fill="url(#colorChariotComm)"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="commandesLivrees"
-                          name="Commandes Livrées"
-                          stroke="#f59e0b"
-                          strokeWidth={2}
-                          dot={{ r: 2 }}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <Percent className="w-3.5 h-3.5 text-emerald-500" /> Taux de commission moyen : {kpiData.avgCommissionRate.toFixed(1)}%
-                  </span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    Passerelle Chariot Validée
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ------------------------------------------------------------- */}
-          {/* SECTION ACTIVITÉ GÉNÉRALE (UTILISATEURS & FLUX) */}
-          {/* ------------------------------------------------------------- */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
-            {/* Chart 3: Utilisateurs Actifs & Activité */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            {/* Graphique 1: Revenus SaaS Saspay */}
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
               <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    3. Évolution de l'Activité & Utilisateurs Actifs
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Utilisateurs actifs quotidiens et requêtes générées sur 14 jours
-                  </p>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Revenus SaaS Saspay (Abonnements)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Souscriptions Pro (19 000 FCFA) & Premium (32 000 FCFA)
+                    </p>
+                  </div>
                 </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
-                  Temps Réel
-                </span>
+
+                <div className="text-right">
+                  <div className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                    {kpiData.totalSaspayRevenue.toLocaleString('fr-FR')} FCFA
+                  </div>
+                  <span className="text-[10px] text-slate-400">Total période</span>
+                </div>
               </div>
 
-              <div className="h-64 sm:h-72 w-full">
+              <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={userActivityChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={subscriptionRevenueStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="colorSaspay" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                       </linearGradient>
-                      <linearGradient id="colorReq" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
                     <Tooltip
                       contentStyle={{
@@ -965,942 +480,48 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         color: '#fff',
                         fontSize: '12px'
                       }}
+                      formatter={(val: any) => [`${Number(val).toLocaleString('fr-FR')} FCFA`, 'Saspay']}
                     />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                     <Area
                       type="monotone"
-                      dataKey="utilisateursActifs"
-                      name="Utilisateurs Actifs"
+                      dataKey="totalSubscriptionRevenue"
+                      name="Revenus Saspay (FCFA)"
                       stroke="#6366f1"
                       strokeWidth={2.5}
                       fillOpacity={1}
-                      fill="url(#colorUsers)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="requetesIA"
-                      name="Requêtes IA / jour"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorReq)"
+                      fill="url(#colorSaspay)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Chart 4: Volume de Mots & Flux de Rédaction */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            {/* Graphique 2: Utilisation des Tokens IA (Strictly Tokens) */}
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
               <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" />
-                    4. Volume des Flux de Rédaction (Mots Générés)
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Nombre de mots générés quotidiennement par les membres
-                  </p>
-                </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60">
-                  Production Globale
-                </span>
-              </div>
-
-              <div className="h-64 sm:h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={userActivityChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: '#334155',
-                        borderRadius: '12px',
-                        color: '#fff',
-                        fontSize: '12px'
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    <Line
-                      type="monotone"
-                      dataKey="fluxMots"
-                      name="Mots rédigés & générés"
-                      stroke="#f59e0b"
-                      strokeWidth={3}
-                      dot={{ r: 3, fill: '#f59e0b' }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Breakdown Cards & Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-                <span>Répartition des Formules</span>
-                <Users className="w-4 h-4 text-indigo-500" />
-              </div>
-              <div className="space-y-2 mt-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-600 dark:text-slate-400">Gratuit (Free)</span>
-                  <span className="font-bold text-slate-900 dark:text-white">65% (1 597)</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-slate-400 h-full rounded-full" style={{ width: '65%' }} />
-                </div>
-
-                <div className="flex justify-between items-center text-xs pt-1">
-                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Abonnés Pro (29€)</span>
-                  <span className="font-bold text-slate-900 dark:text-white">25% (614)</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-indigo-600 h-full rounded-full" style={{ width: '25%' }} />
-                </div>
-
-                <div className="flex justify-between items-center text-xs pt-1">
-                  <span className="text-violet-600 dark:text-violet-400 font-semibold">Premium / Studio (49€)</span>
-                  <span className="font-bold text-slate-900 dark:text-white">10% (247)</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-violet-600 h-full rounded-full" style={{ width: '10%' }} />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-                <span>Trésorerie Globale (14 Jours)</span>
-                <Wallet className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div className="space-y-3 mt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Revenus Abonnements :</span>
-                  <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">+{kpiData.totalSubscriptionRevenuePeriod.toLocaleString('fr-FR')} €</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Commissions Chariot :</span>
-                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">+{kpiData.totalChariotCommissionsPeriod.toLocaleString('fr-FR')} €</span>
-                </div>
-                <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Total Encaissé :</span>
-                  <span className="text-base font-black text-slate-900 dark:text-white">{kpiData.totalCombinedIncome.toLocaleString('fr-FR')} €</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-                <span>Modèle IA Principal (Groq)</span>
-                <Radio className="w-4 h-4 text-indigo-500 animate-pulse" />
-              </div>
-              <div className="space-y-2 mt-3 text-xs">
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div className="font-bold text-slate-900 dark:text-white">qwen/qwen3.8-27b</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Latence moyenne : 260 ms &bull; Haute fidélité</div>
-                </div>
-                <div className="flex justify-between items-center pt-1 text-[11px] text-slate-500">
-                  <span>Fallback automatique :</span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">groq/compound + Gemini</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* TAB 2: REVENUS & TRÉSORERIE DÉTAILLÉE (ABONNEMENTS & CHARIOT) */}
-      {/* ============================================================= */}
-      {activeTab === 'finances' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          
-          {/* Header Controls for Finances */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-emerald-500" />
-                Grand Livre Financier & Analyse des Revenus
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Ventilation détaillée des rentrées d'argent par formule d'abonnement et par livraison de formation Chariot.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5 flex-wrap">
-              {/* Focus mode selector */}
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                <button
-                  onClick={() => setRevenueFocusMode('both')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    revenueFocusMode === 'both'
-                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                      : 'text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  Vue Combinée
-                </button>
-                <button
-                  onClick={() => setRevenueFocusMode('subscriptions')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    revenueFocusMode === 'subscriptions'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  Abonnements Seuls
-                </button>
-                <button
-                  onClick={() => setRevenueFocusMode('chariot')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    revenueFocusMode === 'chariot'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  Chariot Seul
-                </button>
-              </div>
-
-              <button
-                onClick={handleExportFinancialReport}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Exporter CSV</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 4 Financial Highlight Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/60 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                <span>Revenus Abonnements (14j)</span>
-                <CreditCard className="w-4 h-4 text-indigo-500" />
-              </div>
-              <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-                {kpiData.totalSubscriptionRevenuePeriod.toLocaleString('fr-FR')} €
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 space-y-0.5">
-                <div>Pro (29€) : <span className="font-semibold text-slate-900 dark:text-white">{kpiData.totalProRevenuePeriod.toLocaleString('fr-FR')} €</span></div>
-                <div>Premium (49€) : <span className="font-semibold text-slate-900 dark:text-white">{kpiData.totalPremiumRevenuePeriod.toLocaleString('fr-FR')} €</span></div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                <span>Commissions Chariot (14j)</span>
-                <Truck className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                {kpiData.totalChariotCommissionsPeriod.toLocaleString('fr-FR')} €
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 space-y-0.5">
-                <div>Volume Brut GMV : <span className="font-semibold text-slate-900 dark:text-white">{kpiData.totalChariotGMVPeriod.toLocaleString('fr-FR')} €</span></div>
-                <div>Commandes Livrées : <span className="font-semibold text-slate-900 dark:text-white">{kpiData.totalChariotOrdersPeriod} cours</span></div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                <span>Total Encaissé Combiné</span>
-                <Wallet className="w-4 h-4 text-violet-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-white">
-                {kpiData.totalCombinedIncome.toLocaleString('fr-FR')} €
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 space-y-0.5">
-                <div>Coûts API Déduits : <span className="font-semibold text-red-500">-{kpiData.totalCostMonth.toFixed(2)} €</span></div>
-                <div>Bénéfice Net Opérationnel : <span className="font-bold text-emerald-600 dark:text-emerald-400">{kpiData.netProfitEstimated.toFixed(2)} €</span></div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                <span>Performance & Rétention</span>
-                <TrendingUp className="w-4 h-4 text-amber-500" />
-              </div>
-              <div className="text-2xl font-black text-amber-500">
-                +19.4%
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 space-y-0.5">
-                <div>Nouvelles adhésions : <span className="font-semibold text-emerald-500">+{kpiData.totalNewSubsPeriod}</span></div>
-                <div>Taux d'attrition (Churn) : <span className="font-semibold text-slate-700 dark:text-slate-300">{((kpiData.totalChurnPeriod / (kpiData.totalNewSubsPeriod || 1)) * 100).toFixed(1)}%</span></div>
-              </div>
-            </div>
-          </div>
-
-          {/* RENDER THE TWO CHARTS BASED ON FOCUS MODE */}
-          {(revenueFocusMode === 'both' || revenueFocusMode === 'subscriptions') && (
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    Graphique Dédié 1 : Évolution des Revenus d'Abonnements (SaaS)
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Revenu récurrent quotidien ventilé entre forfaits Pro (29€/m) et Premium Studio (49€/m)
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" /> Total Abonnements
-                  </span>
-                  <span className="flex items-center gap-1.5 text-blue-500">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Forfaits Pro
-                  </span>
-                  <span className="flex items-center gap-1.5 text-purple-500">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Forfaits Premium
-                  </span>
-                </div>
-              </div>
-
-              <div className="h-72 sm:h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={combinedFinanceChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorSubTotalBig" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.45} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="colorSubProBig" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} unit="€" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: '#334155',
-                        borderRadius: '12px',
-                        color: '#fff',
-                        fontSize: '12px'
-                      }}
-                      formatter={(val: any, name: any) => [`${val} €`, name]}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="revenuAbonnements"
-                      name="Revenu Total Abonnements (€)"
-                      stroke="#6366f1"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorSubTotalBig)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="revenuPro"
-                      name="Revenus Forfaits Pro (€)"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorSubProBig)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="revenuPremium"
-                      name="Revenus Forfaits Premium (€)"
-                      stroke="#8b5cf6"
-                      strokeWidth={2}
-                      fillOpacity={0.2}
-                      fill="#8b5cf6"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {(revenueFocusMode === 'both' || revenueFocusMode === 'chariot') && (
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                    Graphique Dédié 2 : Évolution des Commissions & Livraisons Chariot
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Commissions nettes perçues et volume d'affaires brut (GMV) des formations e-learning livrées
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-sky-600" /> Volume Brut Livré (GMV)
-                  </span>
-                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" /> Commissions Nettes Bookly
-                  </span>
-                </div>
-              </div>
-
-              <div className="h-72 sm:h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={combinedFinanceChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorChariotCommBig" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} unit="€" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: '#334155',
-                        borderRadius: '12px',
-                        color: '#fff',
-                        fontSize: '12px'
-                      }}
-                      formatter={(val: any, name: any) => {
-                        if (name === 'Commandes Livrées') return [`${val} cours`, name];
-                        return [`${val} €`, name];
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    <Bar
-                      dataKey="volumeBrutChariot"
-                      name="Volume Brut Livré GMV (€)"
-                      fill="#0284c7"
-                      radius={[6, 6, 0, 0]}
-                      barSize={20}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="commissionsChariot"
-                      name="Commissions Perçues (€)"
-                      stroke="#10b981"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorChariotCommBig)"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="panierMoyenChariot"
-                      name="Panier Moyen (€)"
-                      stroke="#a855f7"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {/* TABLEAU DU GRAND LIVRE QUOTIDIEN */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-500" />
-                  Journal Quotidien des Transactions & Livraisons
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Historique journalier des rentrées d'abonnements et des commandes de formation Chariot
-                </p>
-              </div>
-              <span className="text-xs font-semibold text-slate-500">
-                14 derniers jours
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200/60 dark:border-slate-800">
-                  <tr>
-                    <th className="px-5 py-3.5">Date</th>
-                    <th className="px-5 py-3.5 text-indigo-600 dark:text-indigo-400">Revenu Abonnements</th>
-                    <th className="px-5 py-3.5">Pro (29€)</th>
-                    <th className="px-5 py-3.5">Premium (49€)</th>
-                    <th className="px-5 py-3.5">Nouveaux / Churn</th>
-                    <th className="px-5 py-3.5 text-emerald-600 dark:text-emerald-400">Commissions Chariot</th>
-                    <th className="px-5 py-3.5">Volume Brut (GMV)</th>
-                    <th className="px-5 py-3.5">Livraisons</th>
-                    <th className="px-5 py-3.5 font-black text-slate-900 dark:text-white text-right">Total Journalier</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {combinedFinanceChartData.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                        {row.date} <span className="text-[10px] text-slate-400 font-normal">({row.fullDate})</span>
-                      </td>
-                      <td className="px-5 py-3 font-bold text-indigo-600 dark:text-indigo-400">
-                        {row.revenuAbonnements.toLocaleString('fr-FR')} €
-                      </td>
-                      <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
-                        {row.revenuPro} €
-                      </td>
-                      <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
-                        {row.revenuPremium} €
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-emerald-600 font-semibold">+{row.nouvellesSouscriptions}</span>
-                        {row.desabonnements > 0 && (
-                          <span className="text-red-500 font-semibold ml-1.5">-{row.desabonnements}</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 font-bold text-emerald-600 dark:text-emerald-400">
-                        +{row.commissionsChariot.toLocaleString('fr-FR')} €
-                      </td>
-                      <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
-                        {row.volumeBrutChariot.toLocaleString('fr-FR')} €
-                      </td>
-                      <td className="px-5 py-3 text-slate-700 dark:text-slate-300 font-medium">
-                        {row.commandesLivrees} livrées
-                      </td>
-                      <td className="px-5 py-3 font-black text-slate-900 dark:text-white text-right">
-                        {row.totalRevenusJour.toLocaleString('fr-FR')} €
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-slate-50 dark:bg-slate-800/80 font-bold border-t border-slate-200 dark:border-slate-700">
-                  <tr>
-                    <td className="px-5 py-3.5 text-slate-900 dark:text-white">TOTAL PÉRIODE</td>
-                    <td className="px-5 py-3.5 text-indigo-600 dark:text-indigo-400">
-                      {kpiData.totalSubscriptionRevenuePeriod.toLocaleString('fr-FR')} €
-                    </td>
-                    <td className="px-5 py-3.5">{kpiData.totalProRevenuePeriod.toLocaleString('fr-FR')} €</td>
-                    <td className="px-5 py-3.5">{kpiData.totalPremiumRevenuePeriod.toLocaleString('fr-FR')} €</td>
-                    <td className="px-5 py-3.5 text-emerald-600">+{kpiData.totalNewSubsPeriod}</td>
-                    <td className="px-5 py-3.5 text-emerald-600 dark:text-emerald-400">
-                      +{kpiData.totalChariotCommissionsPeriod.toLocaleString('fr-FR')} €
-                    </td>
-                    <td className="px-5 py-3.5">{kpiData.totalChariotGMVPeriod.toLocaleString('fr-FR')} €</td>
-                    <td className="px-5 py-3.5">{kpiData.totalChariotOrdersPeriod} cours</td>
-                    <td className="px-5 py-3.5 text-slate-900 dark:text-white text-right text-sm">
-                      {kpiData.totalCombinedIncome.toLocaleString('fr-FR')} €
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* TAB 3: GESTION DES UTILISATEURS */}
-      {/* ============================================================= */}
-      {activeTab === 'users' && (
-        <div className="space-y-5 animate-in fade-in duration-200">
-          {/* Search & Filter Toolbar */}
-          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Rechercher par nom ou adresse email..."
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            {/* Plan filter pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                onClick={() => setUserPlanFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  userPlanFilter === 'all'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Tous ({users.length})
-              </button>
-              <button
-                onClick={() => setUserPlanFilter('free')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  userPlanFilter === 'free'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Gratuits ({users.filter((u) => u.plan === 'free').length})
-              </button>
-              <button
-                onClick={() => setUserPlanFilter('pro')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  userPlanFilter === 'pro'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Abonnés Pro ({users.filter((u) => u.plan === 'pro').length})
-              </button>
-              <button
-                onClick={() => setUserPlanFilter('premium')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  userPlanFilter === 'premium'
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Premium ({users.filter((u) => u.plan === 'premium').length})
-              </button>
-              <button
-                onClick={() => setUserPlanFilter('blocked')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  userPlanFilter === 'blocked'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Bloqués ({users.filter((u) => u.status === 'blocked').length})
-              </button>
-            </div>
-          </div>
-
-          {/* Users Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">Utilisateur</th>
-                    <th className="py-3.5 px-4">Formule</th>
-                    <th className="py-3.5 px-4">Quota Prompts / Jour</th>
-                    <th className="py-3.5 px-4">Activité Rédaction</th>
-                    <th className="py-3.5 px-4">Inscription</th>
-                    <th className="py-3.5 px-4 text-center">Statut</th>
-                    <th className="py-3.5 px-4 text-right">Actions de Modération</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {filteredUsers.map((user) => {
-                    const isBlocked = user.status === 'blocked';
-                    const quotaPercent = Math.min(100, Math.round((user.dailyPromptsUsed / user.dailyPromptsLimit) * 100));
-
-                    return (
-                      <tr
-                        key={user.id}
-                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${
-                          isBlocked ? 'bg-red-50/40 dark:bg-red-950/20' : ''
-                        }`}
-                      >
-                        {/* User identity */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs"
-                              style={{ background: user.avatarBg }}
-                            >
-                              {user.name.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="font-bold text-slate-900 dark:text-white">{user.name}</div>
-                              <div className="text-[11px] text-slate-500 font-mono">{user.email}</div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Plan */}
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide ${
-                              user.plan === 'premium'
-                                ? 'bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border border-violet-300 dark:border-violet-800'
-                                : user.plan === 'pro'
-                                ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                            }`}
-                          >
-                            {user.plan === 'free' ? 'Gratuit' : user.plan === 'pro' ? 'Abonné Pro' : 'Studio Premium'}
-                          </span>
-                        </td>
-
-                        {/* Quota */}
-                        <td className="py-3.5 px-4">
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                              <span>{user.dailyPromptsUsed} / {user.dailyPromptsLimit} prompts</span>
-                              <span className="font-bold">{quotaPercent}%</span>
-                            </div>
-                            <div className="w-28 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  quotaPercent > 90 ? 'bg-red-500' : quotaPercent > 60 ? 'bg-amber-500' : 'bg-indigo-600'
-                                }`}
-                                style={{ width: `${quotaPercent}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Writing activity */}
-                        <td className="py-3.5 px-4">
-                          <div className="text-slate-900 dark:text-white font-semibold">
-                            {user.totalWordsGenerated.toLocaleString('fr-FR')} mots
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {user.lifetimeProjects} manuscrits créés
-                          </div>
-                        </td>
-
-                        {/* Registered date */}
-                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
-                          {user.registeredDate}
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-3.5 px-4 text-center">
-                          {isBlocked ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950 px-2 py-0.5 rounded-full">
-                              <XCircle className="w-3 h-3" /> Bloqué
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded-full">
-                              <CheckCircle2 className="w-3 h-3" /> Actif
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Action buttons */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => setEditingUser(user)}
-                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors"
-                              title="Ajuster les quotas et détails"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-
-                            <button
-                              onClick={() => handleToggleUserBlock(user.id)}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                isBlocked
-                                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 hover:bg-emerald-200'
-                                  : 'bg-red-100 dark:bg-red-950 text-red-600 hover:bg-red-200'
-                              }`}
-                              title={isBlocked ? 'Débloquer le compte' : 'Bloquer le compte'}
-                            >
-                              {isBlocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* EDIT USER MODAL */}
-          {editingUser && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
-                <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-xs"
-                      style={{ background: editingUser.avatarBg }}
-                    >
-                      {editingUser.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                        Ajuster le compte de {editingUser.name}
-                      </h3>
-                      <p className="text-xs text-slate-500 font-mono">{editingUser.email}</p>
-                    </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                    <Cpu className="w-5 h-5" />
                   </div>
-                  <button
-                    onClick={() => setEditingUser(null)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    &times;
-                  </button>
-                </div>
-
-                <form onSubmit={handleSaveUserEdit} className="space-y-4 text-xs">
                   <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Formule d'Abonnement
-                    </label>
-                    <select
-                      value={editingUser.plan}
-                      onChange={(e) =>
-                        setEditingUser({
-                          ...editingUser,
-                          plan: e.target.value as 'free' | 'pro' | 'premium',
-                          dailyPromptsLimit:
-                            e.target.value === 'premium'
-                              ? 200
-                              : e.target.value === 'pro'
-                              ? 50
-                              : 5
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                    >
-                      <option value="free">Gratuit (Free - 5 prompts/j)</option>
-                      <option value="pro">Abonné Pro (50 prompts/j)</option>
-                      <option value="premium">Studio Premium (200 prompts/j)</option>
-                    </select>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Consommation des Tokens IA
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Tokens d'inférence consommés (Groq & Gemini)
+                    </p>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Limite Prompts / Jour
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={1000}
-                        value={editingUser.dailyPromptsLimit}
-                        onChange={(e) =>
-                          setEditingUser({ ...editingUser, dailyPromptsLimit: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Prompts Utilisés Aujourd'hui
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={editingUser.dailyPromptsUsed}
-                        onChange={(e) =>
-                          setEditingUser({ ...editingUser, dailyPromptsUsed: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                      />
-                    </div>
+                <div className="text-right">
+                  <div className="text-sm font-black text-purple-600 dark:text-purple-400">
+                    {kpiData.totalTokensMonth.toLocaleString('fr-FR')}
                   </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Notes Administrateur & Modération
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={editingUser.notes || ''}
-                      onChange={(e) => setEditingUser({ ...editingUser, notes: e.target.value })}
-                      placeholder="Commentaires internes visibles uniquement par les administrateurs..."
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setEditingUser(null)}
-                      className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-600/20"
-                    >
-                      Enregistrer les Quotas
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* TAB 3: SUIVI DE L'API (GROQ & ESTIMATION DES COÛTS) */}
-      {/* ============================================================= */}
-      {activeTab === 'api' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          
-          {/* Top API Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Tokens Consommés (Total)</span>
-                <Cpu className="w-4 h-4 text-indigo-500" />
-              </div>
-              <div className="text-xl font-black text-slate-900 dark:text-white">
-                {(kpiData.totalTokensMonth / 1000000).toFixed(2)} M
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1">
-                Groq : 82% &bull; Gemini : 18%
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Coût API Estimé</span>
-                <DollarSign className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-                {kpiData.totalCostMonth.toFixed(2)} €
-              </div>
-              <div className="text-[10px] text-emerald-500 mt-1 font-semibold">
-                Budget prévu : {globalConfig.monthlyApiBudgetLimit} € (Sécurisé)
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Requêtes Totales IA</span>
-                <Activity className="w-4 h-4 text-amber-500" />
-              </div>
-              <div className="text-xl font-black text-slate-900 dark:text-white">
-                {kpiData.totalRequestsMonth.toLocaleString('fr-FR')}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1">
-                Taux de succès : 99.8%
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Latence Moyenne Groq</span>
-                <Zap className="w-4 h-4 text-indigo-500" />
-              </div>
-              <div className="text-xl font-black text-slate-900 dark:text-white">
-                295 ms
-              </div>
-              <div className="text-[10px] text-emerald-500 mt-1 font-semibold">
-                Ultra-rapide (LPUs Groq)
-              </div>
-            </div>
-          </div>
-
-          {/* Charts Grid for Tokens and Costs */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Chart 1: Consommation des Tokens Jour par Jour */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-indigo-600" />
-                    Consommation des Tokens Groq & IA (Jour par Jour)
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Répartition tokens d'entrée (prompts) vs tokens de sortie (complétion)
-                  </p>
+                  <span className="text-[10px] text-slate-400">Tokens totaux</span>
                 </div>
               </div>
 
-              <div className="h-64 sm:h-72 w-full">
+              <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={apiStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
@@ -1915,7 +536,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         fontSize: '12px'
                       }}
                     />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                     <Bar dataKey="groqTokens" name="Tokens Groq" fill="#6366f1" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="geminiTokens" name="Tokens Gemini" fill="#a855f7" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -1923,665 +544,623 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
 
-            {/* Chart 2: Évolution des Coûts (€) */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-500" />
-                    Courbe des Coûts Journaliers (€) & Enveloppe Budgétaire
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Suivi précis pour respecter le plafond de {globalConfig.monthlyApiBudgetLimit} €/mois
-                  </p>
-                </div>
-              </div>
+          </div>
 
-              <div className="h-64 sm:h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={apiStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                    <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: '#334155',
-                        borderRadius: '12px',
-                        color: '#fff',
-                        fontSize: '12px'
-                      }}
-                      formatter={(val: any) => [`${Number(val).toFixed(2)} €`, 'Coût']}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="estimatedCost"
-                      name="Coût journalier (€)"
-                      stroke="#10b981"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#colorCost)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+          {/* KPI Mini-cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Forfaits Pro Actifs</span>
+              <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
+                {kpiData.proCount} auteur(s)
               </div>
+              <span className="text-[11px] text-indigo-500 font-semibold mt-0.5 block">19 000 FCFA / mois</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Forfaits Premium Actifs</span>
+              <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
+                {kpiData.premiumCount} auteur(s)
+              </div>
+              <span className="text-[11px] text-purple-500 font-semibold mt-0.5 block">32 000 FCFA / mois</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Taux d'Abonnés Payants</span>
+              <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                {kpiData.totalUsers > 0 ? ((kpiData.paidCount / kpiData.totalUsers) * 100).toFixed(1) : '0.0'}%
+              </div>
+              <span className="text-[11px] text-slate-400 block mt-0.5">Ratio de conversion SaaS</span>
             </div>
           </div>
 
-          {/* Model Breakdown List */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-            <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3">
-              Répartition des Modèles IA en Production
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1">
-                <div className="flex justify-between font-bold text-slate-900 dark:text-white">
-                  <span>qwen/qwen3.8-27b (Groq)</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">72%</span>
-                </div>
-                <p className="text-[11px] text-slate-500">Moteur principal de rédaction de chapitres et relecture.</p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1">
-                <div className="flex justify-between font-bold text-slate-900 dark:text-white">
-                  <span>groq/compound (Groq)</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">18%</span>
-                </div>
-                <p className="text-[11px] text-slate-500">Brainstorming d'idées, synopses et architecture de livres.</p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1">
-                <div className="flex justify-between font-bold text-slate-900 dark:text-white">
-                  <span>Gemini 2.5 Flash (Google)</span>
-                  <span className="text-violet-600 dark:text-violet-400">10%</span>
-                </div>
-                <p className="text-[11px] text-slate-500">Bascule de redondance et tâches multimodales.</p>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
       {/* ============================================================= */}
-      {/* TAB 4: GESTION DES FORMATIONS EN AFFILIATION (CHARIOT) */}
+      {/* TAB 2: REVENUS SAAS SASPAY */}
       {/* ============================================================= */}
-      {activeTab === 'affiliate' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
+      {activeTab === 'finances' && (
+        <div className="space-y-6 animate-in fade-in">
           
-          {/* Header & Add Button */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Award className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                Catalogue des Formations en Affiliation (Chariot)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Gérez vos programmes partenaires, suivez les clics générés et paramétrez le ciblage d'audience (Gratuits vs Abonnés payants).
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                setEditingCourse(null);
-                setCourseForm({
-                  title: '',
-                  author: '',
-                  description: '',
-                  affiliateUrl: '',
-                  targetAudience: 'all',
-                  price: 49,
-                  commissionRate: 40,
-                  category: 'Édition & Créativité',
-                  coverGradient: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                  isActive: true
-                });
-                setIsAddingCourse(true);
-              }}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 shrink-0 self-start sm:self-auto transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Ajouter une Formation Affiliée</span>
-            </button>
-          </div>
-
-          {/* ADD / EDIT FORM MODAL */}
-          {isAddingCourse && (
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-indigo-200 dark:border-indigo-800 shadow-xl space-y-5 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
-                <h4 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                  <Award className="w-4 h-4 text-indigo-600" />
-                  {editingCourse ? 'Modifier la Formation Affiliée' : 'Créer une Nouvelle Formation Affiliée (Chariot)'}
-                </h4>
-                <button
-                  onClick={() => setIsAddingCourse(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
-                >
-                  &times;
-                </button>
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-wider">
+                  <CreditCard className="w-4 h-4" />
+                  Passerelle Saspay Active
+                </div>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                  Revenus des Abonnements SaaS (Saspay)
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Suivi des souscriptions Pro (19 000 FCFA) et Premium (32 000 FCFA) encaissées via Saspay.
+                </p>
               </div>
 
-              <form onSubmit={handleSaveAffiliateCourse} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Titre de la Formation *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={courseForm.title}
-                      onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })}
-                      placeholder="Ex: Masterclass E-books & Storytelling"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                    />
-                  </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportSaspayReport}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Télécharger Rapport CSV</span>
+                </button>
+              </div>
+            </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Nom de l'Auteur ou Créateur *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={courseForm.author}
-                      onChange={(e) => setCourseForm({ ...courseForm, author: e.target.value })}
-                      placeholder="Ex: Alexandre K. & Partenaires"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                    />
-                  </div>
+            {/* Financial Highlights */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">
+                  MRR Actuel (Revenus Récurrents Mensuels)
+                </span>
+                <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                  {kpiData.mrr.toLocaleString('fr-FR')} FCFA
                 </div>
+                <span className="text-[11px] text-indigo-500 font-medium mt-0.5 block">
+                  ARR projeté : {kpiData.arr.toLocaleString('fr-FR')} FCFA / an
+                </span>
+              </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Lien d'Affiliation Unique (Chariot) *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="url"
-                      required
-                      value={courseForm.affiliateUrl}
-                      onChange={(e) => setCourseForm({ ...courseForm, affiliateUrl: e.target.value })}
-                      placeholder="https://chariot.com/aff/votre-programme?ref=..."
-                      className="w-full px-3.5 py-2.5 pl-9 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono outline-none"
-                    />
-                    <ExternalLink className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Insérez le lien de tracking unique généré depuis votre compte Chariot pour comptabiliser les commissions.
-                  </p>
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">
+                  Souscriptions Encaissées Période
+                </span>
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                  {kpiData.totalSaspayRevenue.toLocaleString('fr-FR')} FCFA
                 </div>
+                <span className="text-[11px] text-slate-400 font-medium mt-0.5 block">
+                  Via Saspay Mobile Money & Cartes
+                </span>
+              </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Description Détaillée
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={courseForm.description}
-                    onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })}
-                    placeholder="Présentez les objectifs du cours, les modules inclus et la promesse pédagogique..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">
+                  Abonnés Payants Actifs
+                </span>
+                <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                  {kpiData.paidCount}
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium mt-0.5 block">
+                  {kpiData.proCount} Pro • {kpiData.premiumCount} Premium
+                </span>
+              </div>
+            </div>
+
+            {/* Table of Subscriptions */}
+            <div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3">
+                Historique Journalier des Souscriptions Saspay
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="p-3 rounded-l-xl">Date</th>
+                      <th className="p-3">Forfait Pro (FCFA)</th>
+                      <th className="p-3">Forfait Premium (FCFA)</th>
+                      <th className="p-3">Revenu Total (FCFA)</th>
+                      <th className="p-3">Nouveaux Abonnés</th>
+                      <th className="p-3 rounded-r-xl">Statut Passerelle</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {subscriptionRevenueStats.map((stat, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{stat.date} ({stat.dayLabel})</span>
+                        </td>
+                        <td className="p-3 font-medium">{stat.proRevenue.toLocaleString('fr-FR')} FCFA</td>
+                        <td className="p-3 font-medium">{stat.premiumRevenue.toLocaleString('fr-FR')} FCFA</td>
+                        <td className="p-3 font-black text-indigo-600 dark:text-indigo-400">
+                          {stat.totalSubscriptionRevenue.toLocaleString('fr-FR')} FCFA
+                        </td>
+                        <td className="p-3">
+                          <span className="inline-flex items-center gap-1 font-bold text-emerald-600">
+                            +{stat.newSubscriptionsCount}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            Saspay Validé
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* TAB 3: GESTION DES UTILISATEURS */}
+      {/* ============================================================= */}
+      {activeTab === 'users' && (
+        <div className="space-y-6 animate-in fade-in">
+          
+          <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Répertoire des Auteurs & Comptes ({filteredUsers.length} affichés)
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Contrôle des accès, changement de forfait et réinitialisation des quotas.
+                </p>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom, email..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Visibilité & Ciblage *
-                    </label>
-                    <select
-                      value={courseForm.targetAudience}
-                      onChange={(e) =>
-                        setCourseForm({
-                          ...courseForm,
-                          targetAudience: e.target.value as 'all' | 'paid_only'
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none font-semibold"
-                    >
-                      <option value="all">Ouvert à tous (Gratuits + Payants)</option>
-                      <option value="paid_only">Réservé aux Abonnés Payants (Pro/Premium)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Prix de Vente Indicatif (€)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={courseForm.price}
-                      onChange={(e) => setCourseForm({ ...courseForm, price: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Taux de Commission Affiliée (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={courseForm.commissionRate}
-                      onChange={(e) =>
-                        setCourseForm({ ...courseForm, commissionRate: Number(e.target.value) })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingCourse(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-600/20"
-                  >
-                    {editingCourse ? 'Mettre à Jour' : 'Enregistrer la Formation'}
-                  </button>
-                </div>
-              </form>
+                <select
+                  value={userPlanFilter}
+                  onChange={(e: any) => setUserPlanFilter(e.target.value)}
+                  className="py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 outline-none"
+                >
+                  <option value="all">Tous les forfaits</option>
+                  <option value="free">Gratuit ({kpiData.freeCount})</option>
+                  <option value="pro">Pro ({kpiData.proCount})</option>
+                  <option value="premium">Premium ({kpiData.premiumCount})</option>
+                  <option value="blocked">Bloqués ({kpiData.blockedCount})</option>
+                </select>
+              </div>
             </div>
-          )}
 
-          {/* Courses List Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+            {/* Users Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <tr>
-                    <th className="py-3.5 px-4">Formation & Créateur</th>
-                    <th className="py-3.5 px-4">Ciblage</th>
-                    <th className="py-3.5 px-4">Prix & Commission</th>
-                    <th className="py-3.5 px-4">Suivi des Clics</th>
-                    <th className="py-3.5 px-4">Conversions & Revenus</th>
-                    <th className="py-3.5 px-4 text-center">Visibilité</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
+                    <th className="p-3 rounded-l-xl">Utilisateur</th>
+                    <th className="p-3">Forfait</th>
+                    <th className="p-3">Prompts Utilisés</th>
+                    <th className="p-3">Volume Mots</th>
+                    <th className="p-3">Projets</th>
+                    <th className="p-3">Statut</th>
+                    <th className="p-3 rounded-r-xl text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {affiliateCourses.map((course) => {
-                    const estEarnings = (course.conversionsCount || 0) * (course.price || 0) * ((course.commissionRate || 40) / 100);
-
-                    return (
-                      <tr key={course.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                        {/* Title & Author */}
-                        <td className="py-3.5 px-4">
-                          <div className="space-y-0.5">
-                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{course.title}</span>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-slate-400 text-xs">
+                        Aucun utilisateur ne correspond aux critères.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((u) => (
+                      <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
+                              style={{ background: u.avatarBg || 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                            >
+                              {u.name.substring(0, 2).toUpperCase()}
                             </div>
-                            <div className="text-[11px] text-slate-500">Par {course.author} &bull; {course.category}</div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
+                              <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
+                            </div>
                           </div>
                         </td>
-
-                        {/* Target audience */}
-                        <td className="py-3.5 px-4">
-                          {course.targetAudience === 'paid_only' ? (
-                            <span className="inline-block px-2.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-bold text-[10px]">
-                              Réservé Payants
-                            </span>
-                          ) : (
-                            <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px]">
-                              Ouvert à Tous
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Price & Commission */}
-                        <td className="py-3.5 px-4">
-                          <div className="font-semibold text-slate-900 dark:text-white">{course.price} €</div>
-                          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
-                            {course.commissionRate}% comm. ({((course.price * course.commissionRate) / 100).toFixed(1)} €/vente)
-                          </div>
-                        </td>
-
-                        {/* Clicks */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                            <MousePointerClick className="w-3.5 h-3.5 text-indigo-500" />
-                            <span>{course.clicksCount} clics</span>
-                          </div>
-                          <button
-                            onClick={() => handleSimulateAffiliateClick(course.id)}
-                            className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline mt-0.5"
-                          >
-                            + Tester le lien
-                          </button>
-                        </td>
-
-                        {/* Conversions */}
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-emerald-600 dark:text-emerald-400">
-                            {course.conversionsCount} ventes
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            ~ {estEarnings.toFixed(2)} €
-                          </div>
-                        </td>
-
-                        {/* Active toggle */}
-                        <td className="py-3.5 px-4 text-center">
-                          <button
-                            onClick={() => handleToggleCourseStatus(course.id)}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold transition-colors ${
-                              course.isActive
-                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                        <td className="p-3">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                              u.plan === 'premium'
+                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                : u.plan === 'pro'
+                                ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                             }`}
                           >
-                            {course.isActive ? 'Active' : 'Désactivée'}
-                          </button>
+                            {u.plan}
+                          </span>
                         </td>
-
-                        {/* Actions */}
-                        <td className="py-3.5 px-4 text-right">
+                        <td className="p-3">
+                          <span className="font-semibold text-slate-900 dark:text-white">{u.dailyPromptsUsed}</span>
+                          <span className="text-slate-400 text-[10px]"> / {u.dailyPromptsLimit}</span>
+                        </td>
+                        <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                          {(u.totalWordsGenerated || 0).toLocaleString('fr-FR')}
+                        </td>
+                        <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                          {u.lifetimeProjects || 0}
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              u.status === 'blocked'
+                                ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            }`}
+                          >
+                            {u.status === 'blocked' ? 'Bloqué' : 'Actif'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => {
-                                setEditingCourse(course);
-                                setCourseForm(course);
-                                setIsAddingCourse(true);
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors"
-                              title="Modifier la formation"
+                            {/* Plan toggle */}
+                            <select
+                              value={u.plan}
+                              onChange={(e: any) => handleChangeUserPlan(u.id, e.target.value)}
+                              className="text-[11px] p-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <option value="free">Gratuit</option>
+                              <option value="pro">Pro</option>
+                              <option value="premium">Premium</option>
+                            </select>
+
+                            {/* Reset counters */}
+                            <button
+                              type="button"
+                              onClick={() => handleResetUserCounters(u.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
+                              title="Réinitialiser les compteurs à zéro"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
                             </button>
 
+                            {/* Block/Unblock */}
                             <button
-                              onClick={() => handleDeleteCourse(course.id)}
-                              className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/60 hover:bg-red-100 text-red-600 transition-colors"
-                              title="Supprimer la formation"
+                              type="button"
+                              onClick={() => handleToggleBlockUser(u.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                u.status === 'blocked'
+                                  ? 'text-emerald-600 hover:bg-emerald-50'
+                                  : 'text-red-500 hover:bg-red-50'
+                              }`}
+                              title={u.status === 'blocked' ? 'Débloquer' : 'Bloquer'}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Ban className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+
           </div>
+
         </div>
       )}
 
       {/* ============================================================= */}
-      {/* TAB 5: JOURNAL D'ERREURS & PARAMÈTRES GLOBAUX */}
+      {/* TAB 4: CONSOMMATION DES TOKENS IA (SANS AUCUN COÛT MONÉTAIRE) */}
       {/* ============================================================= */}
-      {activeTab === 'settings_logs' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
+      {activeTab === 'api' && (
+        <div className="space-y-6 animate-in fade-in">
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* LEFT COLUMN: PARAMÈTRES GLOBAUX MODIFIABLES SANS REDÉPLOIEMENT */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
-              <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
-                <div className="space-y-0.5">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-indigo-600" />
-                    Paramètres Globaux & Quotas
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Ajustez les règles de l'application en direct sans redéployer le code.
-                  </p>
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 text-xs font-black uppercase tracking-wider">
+                <Cpu className="w-4 h-4" />
+                Métriques d'Inférence d'Intelligence Artificielle
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                Consommation des Tokens IA (Gemini & Groq)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Surveillance exclusive du volume de tokens consommés, sans indicateur de coût financier.
+              </p>
+            </div>
+
+            {/* Tokens Highlights */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 my-6">
+              <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Tokens Totaux</span>
+                <div className="text-xl font-black text-purple-700 dark:text-purple-300 mt-1">
+                  {kpiData.totalTokensMonth.toLocaleString('fr-FR')}
+                </div>
+                <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">Tous modèles confondus</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Tokens Groq</span>
+                <div className="text-xl font-black text-indigo-700 dark:text-indigo-300 mt-1">
+                  {kpiData.groqTokensMonth.toLocaleString('fr-FR')}
+                </div>
+                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">LPUs Haute Vitesse</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Tokens Gemini</span>
+                <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                  {kpiData.geminiTokensMonth.toLocaleString('fr-FR')}
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">Google DeepMind</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Requêtes IA</span>
+                <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                  {kpiData.totalRequestsMonth}
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">Appels API traités</span>
+              </div>
+            </div>
+
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Chart 1: Tokens par Fournisseur */}
+              <div>
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-2">
+                  Volume Quotidien de Tokens : Groq vs Gemini
+                </h4>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={apiStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                      <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          borderColor: '#334155',
+                          borderRadius: '12px',
+                          color: '#fff',
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                      <Bar dataKey="groqTokens" name="Tokens Groq" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="geminiTokens" name="Tokens Gemini" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
-              <form onSubmit={handleSaveGlobalConfig} className="space-y-4 text-xs">
-                
-                {/* Free Quotas */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                  <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-indigo-500" /> Quotas Formule Gratuite
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                        Limite Prompts / Jour
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={configDraft.freeDailyPromptLimit}
-                        onChange={(e) =>
-                          setConfigDraft({ ...configDraft, freeDailyPromptLimit: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
+              {/* Chart 2: Tokens Entrée vs Sortie */}
+              <div>
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-2">
+                  Répartition : Tokens d'Entrée (Prompt) vs Sortie (Complétion)
+                </h4>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={apiStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorInput" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="colorOutput" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                      <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          borderColor: '#334155',
+                          borderRadius: '12px',
+                          color: '#fff',
+                          fontSize: '12px'
+                        }}
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                        Projets Max Créés (Vie)
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={configDraft.maxFreeProjects}
-                        onChange={(e) =>
-                          setConfigDraft({ ...configDraft, maxFreeProjects: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
+                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                      <Area
+                        type="monotone"
+                        dataKey="inputTokens"
+                        name="Tokens d'Entrée"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        fill="url(#colorInput)"
                       />
-                    </div>
-                  </div>
+                      <Area
+                        type="monotone"
+                        dataKey="outputTokens"
+                        name="Tokens de Sortie"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#colorOutput)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
+              </div>
 
-                {/* Pro Quotas */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                  <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Quotas Abonnés Pro & Premium
-                  </div>
+            </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                        Prompts / Jour (Pro)
-                      </label>
-                      <input
-                        type="number"
-                        min={10}
-                        max={500}
-                        value={configDraft.proDailyPromptLimit}
-                        onChange={(e) =>
-                          setConfigDraft({ ...configDraft, proDailyPromptLimit: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                        Prompts / Jour (Premium)
-                      </label>
-                      <input
-                        type="number"
-                        min={50}
-                        max={1000}
-                        value={configDraft.premiumDailyPromptLimit}
-                        onChange={(e) =>
-                          setConfigDraft({ ...configDraft, premiumDailyPromptLimit: Number(e.target.value) })
-                        }
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
-                      />
-                    </div>
-                  </div>
+            {/* Model details */}
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3">
+                Modèles d'Intelligence Artificielle en Ligne
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <p className="font-bold text-slate-900 dark:text-white">qwen/qwen3.8-27b (Groq)</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Moteur principal de rédaction de chapitres et relecture.</p>
                 </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <p className="font-bold text-slate-900 dark:text-white">groq/compound (Groq)</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Brainstorming, structuration de plans et idéation rapide.</p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <p className="font-bold text-slate-900 dark:text-white">gemini-2.5-flash (Google)</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Raisonnement complexe et synthèses de contenu.</p>
+                </div>
+              </div>
+            </div>
 
-                {/* API Budget Alert Cap */}
+          </div>
+
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* TAB 5: JOURNAL SYSTÈME & PARAMÈTRES GLOBAUX */}
+      {/* ============================================================= */}
+      {activeTab === 'settings_logs' && (
+        <div className="space-y-6 animate-in fade-in">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Global Settings */}
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-indigo-600" />
+                Quotas & Limites Quotidiennes
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Ajustez les quotas de requêtes IA journalières autorisées par type de compte.
+              </p>
+
+              <div className="space-y-3 pt-2">
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Plafond d'Alerte Budget API Groq (€ / mois)
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Limite quotidienne Plan Gratuit (prompts / jour)
                   </label>
                   <input
                     type="number"
-                    min={10}
-                    max={5000}
-                    value={configDraft.monthlyApiBudgetLimit}
+                    value={globalConfig.freeDailyPromptLimit}
                     onChange={(e) =>
-                      setConfigDraft({ ...configDraft, monthlyApiBudgetLimit: Number(e.target.value) })
+                      onUpdateGlobalConfig({
+                        ...globalConfig,
+                        freeDailyPromptLimit: Number(e.target.value) || 5
+                      })
                     }
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none font-bold"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
                   />
                 </div>
 
-                {/* Maintenance Mode Toggle */}
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60">
-                  <div>
-                    <div className="font-bold text-slate-900 dark:text-white">Mode Maintenance</div>
-                    <div className="text-[11px] text-slate-500">
-                      Met en pause temporairement les nouvelles générations IA pour les utilisateurs non-admins.
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={configDraft.maintenanceMode}
-                    onChange={(e) =>
-                      setConfigDraft({ ...configDraft, maintenanceMode: e.target.checked })
-                    }
-                    className="w-5 h-5 accent-indigo-600 rounded cursor-pointer"
-                  />
-                </div>
-
-                {/* Global Announcement Banner */}
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Bannière d'Annonce Utilisateur
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Limite quotidienne Plan Pro (prompts / jour)
                   </label>
                   <input
-                    type="text"
-                    value={configDraft.announcementBanner}
+                    type="number"
+                    value={globalConfig.proDailyPromptLimit}
                     onChange={(e) =>
-                      setConfigDraft({ ...configDraft, announcementBanner: e.target.value })
+                      onUpdateGlobalConfig({
+                        ...globalConfig,
+                        proDailyPromptLimit: Number(e.target.value) || 50
+                      })
                     }
-                    placeholder="Message d'information affiché en haut de l'espace membre..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Limite quotidienne Plan Premium (prompts / jour)
+                  </label>
+                  <input
+                    type="number"
+                    value={globalConfig.premiumDailyPromptLimit}
+                    onChange={(e) =>
+                      onUpdateGlobalConfig({
+                        ...globalConfig,
+                        premiumDailyPromptLimit: Number(e.target.value) || 200
+                      })
+                    }
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
                   />
                 </div>
 
                 <div className="pt-2">
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all"
-                  >
-                    Appliquer & Sauvegarder les Paramètres Globaux
-                  </button>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Bandeau d'Annonce Global
+                  </label>
+                  <input
+                    type="text"
+                    value={globalConfig.announcementBanner}
+                    onChange={(e) =>
+                      onUpdateGlobalConfig({
+                        ...globalConfig,
+                        announcementBanner: e.target.value
+                      })
+                    }
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                  />
                 </div>
-              </form>
+              </div>
             </div>
 
-            {/* RIGHT COLUMN: JOURNAL DES ERREURS & LOGS API */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800 mb-4">
-                  <div className="space-y-0.5">
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <AlertOctagon className="w-4 h-4 text-red-500" />
-                      Journal des Erreurs & Incidents API
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Historique des requêtes échouées, rate limits et alertes de latence.
-                    </p>
-                  </div>
+            {/* Error Logs */}
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-500" />
+                  Journal des Événements & Santé Système
+                </h3>
+                <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                  Système Sain
+                </span>
+              </div>
 
-                  <button
-                    onClick={handleClearLogs}
-                    className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                  >
-                    Purger
-                  </button>
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  <span>Tous les services opérationnels</span>
                 </div>
+                <p className="text-[11px] text-slate-500">
+                  Aucune erreur critique n'est signalée. Les appels API Groq, Gemini et Saspay sont surveillés en temps réel.
+                </p>
+              </div>
 
-                {/* Log items */}
-                <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
-                  {errorLogs.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-xs">
-                      Aucune erreur récente enregistrée. Tous les services fonctionnent de manière optimale.
-                    </div>
-                  ) : (
-                    errorLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className={`p-3.5 rounded-2xl border transition-all text-xs space-y-1.5 ${
-                          log.severity === 'critical'
-                            ? 'bg-red-50/50 dark:bg-red-950/30 border-red-200 dark:border-red-800'
-                            : log.severity === 'warning'
-                            ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
-                            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                                log.severity === 'critical'
-                                  ? 'bg-red-600 text-white'
-                                  : log.severity === 'warning'
-                                  ? 'bg-amber-500 text-slate-950 font-black'
-                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                              }`}
-                            >
-                              {log.service.toUpperCase()} &bull; {log.errorCode}
-                            </span>
-                            <span className="font-mono text-[10px] text-slate-400">{log.timestamp}</span>
-                          </div>
-
-                          <button
-                            onClick={() => handleToggleResolveLog(log.id)}
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-colors ${
-                              log.resolved
-                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-emerald-50'
-                            }`}
-                          >
-                            {log.resolved ? 'Résolu ✓' : 'Marquer résolu'}
-                          </button>
-                        </div>
-
-                        <p className="text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
-                          {log.message}
-                        </p>
-
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
-                          <span>Route : {log.endpoint}</span>
-                          <span>Utilisateur : {log.userEmail}</span>
-                        </div>
+              {errorLogs.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {errorLogs.map((log) => (
+                    <div key={log.id} className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs">
+                      <div className="flex items-center justify-between font-bold text-red-700 dark:text-red-400">
+                        <span>{log.service.toUpperCase()} - {log.errorCode}</span>
+                        <span className="text-[10px] text-slate-400">{log.timestamp}</span>
                       </div>
-                    ))
-                  )}
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">{log.message}</p>
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-                <span>Surveillance active des tokens et de la disponibilité 24/7</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">100% Uptime</span>
-              </div>
+              )}
             </div>
+
           </div>
+
         </div>
       )}
+
     </div>
   );
 };

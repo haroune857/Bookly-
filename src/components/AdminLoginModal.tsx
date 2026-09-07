@@ -131,7 +131,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 id="admin-email-input"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="ex: admin@bookly.studio"
+                placeholder="ex: admin.studio@bookly.internal ou admin"
                 required
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
               />

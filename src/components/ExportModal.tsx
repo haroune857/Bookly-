@@ -23,6 +23,7 @@ import {
 import { Project, LibraryBook } from '../types';
 import {
   generateDocxBlob,
+  generatePdfBlob,
   generatePrintableBookHtml,
   paginateBook,
   stripMarkdownToPureText,
@@ -94,46 +95,39 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     a.download = filename;
     document.body.appendChild(a);
     a.click();
+    // Conserve l'URL 45 secondes pour permettre aux navigateurs et mobiles de valider le fichier sur disque
     setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 250);
+      try {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignorer si déjà nettoyé
+      }
+    }, 45000);
   };
 
   const handleDownload = async () => {
     setIsExporting(true);
-    const sanitizedTitle = (title || 'livre').toLowerCase().replace(/[^a-z0-9_-]/gi, '_');
+    const sanitizedTitle = (title || 'livre')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_-]/gi, '_');
 
     try {
       if (format === 'docx') {
-        onShowToast('Génération Word...', 'Formatage du document .docx en A4 conforme...', 'info');
-        const docxBlob = await generateDocxBlob(item);
+        onShowToast('Génération Word DOCX...', 'Mise en page du document .docx en A4 conforme...', 'info');
+        const rawBlob = await generateDocxBlob(item);
+        const docxBlob = new Blob([rawBlob], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
         triggerBrowserDownload(docxBlob, `${sanitizedTitle}.docx`);
-        onShowToast('Export DOCX réussi', `"${title}.docx" téléchargé (compatible Word, LibreOffice, Google Docs, iOS, Android).`, 'success');
+        onShowToast('Export DOCX Réussi !', `"${title}.docx" téléchargé avec succès (compatible Word, Google Docs, LibreOffice).`, 'success');
       } else if (format === 'pdf') {
-        const printHtml = generatePrintableBookHtml(item);
-        
-        // Essai d'ouverture de la fenêtre d'impression
-        let printOpened = false;
-        try {
-          const printWindow = window.open('', '_blank');
-          if (printWindow) {
-            printWindow.document.open();
-            printWindow.document.write(printHtml);
-            printWindow.document.close();
-            printOpened = true;
-            onShowToast('Aperçu A4 / PDF ouvert', 'Sélectionnez "Enregistrer en PDF" ou "Imprimer" dans le dialogue.', 'success');
-          }
-        } catch (e) {
-          console.warn('Popup blocked, triggering direct download fallback', e);
-        }
-
-        // Si bloqué par un bloqueur de popups ou sur mobile, téléchargement direct du fichier HTML A4 autonome
-        if (!printOpened) {
-          const blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
-          triggerBrowserDownload(blob, `${sanitizedTitle}_manuscrit_A4.html`);
-          onShowToast('Fichier A4 téléchargé', 'Ouvrez ce fichier sur n\'importe quel appareil pour l\'imprimer ou le convertir en PDF.', 'success');
-        }
+        onShowToast('Génération PDF 4K...', 'Mise en page du manuscrit A4 Haute Définition avec couverture et sommaire...', 'info');
+        const pdfBlob = await generatePdfBlob(item);
+        triggerBrowserDownload(pdfBlob, `${sanitizedTitle}_Livre_A4_4K.pdf`);
+        onShowToast('Export PDF 4K Réussi !', `"${title}.pdf" téléchargé avec succès (format A4 Haute Définition / 4K).`, 'success');
       } else if (format === 'html') {
         const content = generatePrintableBookHtml(item);
         const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
@@ -154,7 +148,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       }
     } catch (err) {
       console.error('Export error:', err);
-      onShowToast('Erreur d\'export', 'Impossible de générer le fichier.', 'error');
+      onShowToast('Erreur d\'export', 'Impossible de générer le fichier. Veuillez réessayer.', 'error');
     } finally {
       setIsExporting(false);
     }
@@ -271,17 +265,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               {[
                 {
                   id: 'pdf' as const,
-                  label: 'PDF / Livre A4',
-                  sub: 'Impression & Couverture',
+                  label: 'PDF 4K / Livre A4',
+                  sub: 'Haute Définition Print',
                   icon: Printer,
-                  badge: 'Recommandé'
+                  badge: 'Ultra HD 4K'
                 },
                 {
                   id: 'docx' as const,
-                  label: 'Word (.docx)',
-                  sub: 'Styles A4 modifiables',
+                  label: 'Word Docs (.docx)',
+                  sub: 'Microsoft Word & Docs',
                   icon: FileText,
-                  badge: 'Standard'
+                  badge: 'A4 Conforme'
                 },
                 {
                   id: 'html' as const,
@@ -557,9 +551,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <Download className="w-4 h-4" />
             <span>
               {format === 'docx'
-                ? 'Télécharger en Word (.docx A4)'
+                ? 'Télécharger en Word Docs (.docx A4)'
                 : format === 'pdf'
-                ? 'Générer & Télécharger le Livre A4'
+                ? 'Télécharger en PDF 4K (.pdf A4)'
                 : `Télécharger le fichier (.${format})`}
             </span>
           </button>

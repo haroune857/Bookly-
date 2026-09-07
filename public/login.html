@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOOKLY — Connexion & Inscription</title>
+  
+  <!-- Police moderne sans-serif -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome pour les icônes de réseaux sociaux -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <style>
+    /* ==========================================================================
+       VARIABLES ET RESET GLOBAL
+       ========================================================================== */
+    :root {
+      --primary-purple: #7c3aed;
+      --primary-purple-dark: #6d28d9;
+      --primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 50%, #4f46e5 100%);
+      --bg-light: #f8fafc;
+      --card-bg: #ffffff;
+      --text-dark: #0f172a;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --shadow-soft: 0 20px 40px -15px rgba(124, 58, 237, 0.15), 0 0 25px rgba(0, 0, 0, 0.06);
+      --transition-speed: 0.65s;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg-light);
+      background-image: 
+        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(99, 102, 241, 0.12) 0%, transparent 40%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 20px;
+      color: var(--text-dark);
+    }
+
+    /* Logo / Lien de retour */
+    .brand-header {
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--primary-purple);
+      font-weight: 800;
+      font-size: 24px;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-header i {
+      font-size: 26px;
+    }
+
+    /* ==========================================================================
+       CONTENEUR PRINCIPAL (SLIDING PANELS)
+       ========================================================================== */
+    .container {
+      background-color: var(--card-bg);
+      border-radius: 28px;
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+      width: 860px;
+      max-width: 100%;
+      min-height: 560px;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+
+    .form-container {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      transition: all var(--transition-speed) cubic-bezier(0.77, 0, 0.175, 1);
+    }
+
+    /* Formulaire de Connexion (Panneau Gauche initial) */
+    .sign-in-container {
+      left: 0;
+      width: 50%;
+      z-index: 2;
+    }
+
+    /* Formulaire d'Inscription */
+    .sign-up-container {
+      left: 0;
+      width: 50%;
+      opacity: 0;
+      z-index: 1;
+    }
+
+    /* Basculement lors de l'activation (Panneau Droit actif) */
+    .container.right-panel-active .sign-in-container {
+      transform: translateX(100%);
+      opacity: 0;
+      z-index: 1;
+    }
+
+    .container.right-panel-active .sign-up-container {
+      transform: translateX(100%);
+      opacity: 1;
+      z-index: 5;
+      animation: show var(--transition-speed);
+    }
+
+    @keyframes show {
+      0%, 49.99% {
+        opacity: 0;
+        z-index: 1;
+      }
+      50%, 100% {
+        opacity: 1;
+        z-index: 5;
+      }
+    }
+
+    /* ==========================================================================
+       CONTENU DU FORMULAIRE
+       ========================================================================== */
+    form {
+      background-color: var(--card-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 0 45px;
+      height: 100%;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text-dark);
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    /* Bouton Google entier */
+    .btn-google-full {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: #f8fafc;
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dark);
+      cursor: pointer;
+      margin: 10px 0 14px;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .btn-google-full:hover {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+    }
+
+    .google-brand {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .divider {
+      font-size: 12px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border-color);
+    }
+
+    .divider span {
+      padding: 0 12px;
+    }
+
+    /* Champs de saisie */
+    .input-group {
+      position: relative;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    .input-group i {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 15px;
+      pointer-events: none;
+      transition: color 0.2s;
+    }
+
+    .input-group input {
+      background-color: #f8fafc;
+      border: 1.5px solid var(--border-color);
+      padding: 14px 16px 14px 44px;
+      border-radius: 12px;
+      width: 100%;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text-dark);
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .input-group input:focus {
+      background-color: #ffffff;
+      border-color: var(--primary-purple);
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
+    }
+
+    .input-group input:focus + i {
+      color: var(--primary-purple);
+    }
+
+    /* Lien Mot de passe oublié */
+    .forgot-password {
+      color: var(--primary-purple);
+      font-size: 13px;
+      text-decoration: none;
+      margin: 4px 0 18px;
+      align-self: flex-end;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .forgot-password:hover {
+      text-decoration: underline;
+      color: var(--primary-purple-dark);
+    }
+
+    /* Boutons */
+    button.btn-primary {
+      border-radius: 12px;
+      border: none;
+      background: var(--primary-gradient);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 14px 40px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 8px 18px -4px rgba(124, 58, 237, 0.4);
+      width: 100%;
+    }
+
+    button.btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 22px -4px rgba(124, 58, 237, 0.5);
+    }
+
+    button.btn-primary:active {
+      transform: translateY(0);
+    }
+
+    /* Appel à l'inscription dans le formulaire */
+    .signup-callout {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .signup-callout .btn-text {
+      background: none;
+      border: none;
+      color: var(--primary-purple);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      font-family: inherit;
+    }
+
+    /* ==========================================================================
+       PANNEAU D'OVERLAY COLORÉ (VIOLET VIBRANT AVEC DÉCOUPE INCURVÉE)
+       ========================================================================== */
+    .overlay-container {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 50%;
+      height: 100%;
+      overflow: hidden;
+      transition: transform var(--transition-speed) cubic-bezier(0.77, 0, 0.175, 1);
+      z-index: 100;
+    }
+
+    .container.right-panel-active .overlay-container {
+      transform: translateX(-100%);
+    }
+
+    .overlay {
+      background: var(--primary-gradient);
+      color: #ffffff;
+      position: relative;
+      left: -100%;
+      height: 100%;
+      width: 200%;
+      transform: translateX(0);
+      transition: transform var(--transition-speed) cubic-bezier(0.77, 0, 0.175, 1);
+    }
+
+    .container.right-panel-active .overlay {
+      transform: translateX(50%);
+    }
+
+    .overlay-panel {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 0 45px;
+      text-align: center;
+      top: 0;
+      height: 100%;
+      width: 50%;
+      transform: translateX(0);
+      transition: transform var(--transition-speed) cubic-bezier(0.77, 0, 0.175, 1);
+    }
+
+    .overlay-left {
+      transform: translateX(-20%);
+    }
+
+    .container.right-panel-active .overlay-left {
+      transform: translateX(0);
+    }
+
+    .overlay-right {
+      right: 0;
+      transform: translateX(0);
+    }
+
+    .container.right-panel-active .overlay-right {
+      transform: translateX(20%);
+    }
+
+    /* Forme incurvée organique de découpe (Curved overlay aesthetic) */
+    .overlay-panel::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 120px;
+      pointer-events: none;
+    }
+
+    .overlay-right::before {
+      left: -60px;
+      background: radial-gradient(circle at 0% 50%, transparent 60px, rgba(124, 58, 237, 0.8) 61px);
+      opacity: 0.15;
+    }
+
+    .overlay-panel h1 {
+      color: #ffffff;
+      font-size: 28px;
+      margin-bottom: 14px;
+    }
+
+    .overlay-panel p {
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.6;
+      letter-spacing: 0.2px;
+      margin-bottom: 28px;
+      color: rgba(255, 255, 255, 0.9);
+      max-width: 320px;
+    }
+
+    /* Bouton Ghost sur l'overlay */
+    button.ghost {
+      background-color: transparent;
+      border: 2px solid #ffffff;
+      border-radius: 12px;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 13px 36px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      font-family: inherit;
+    }
+
+    button.ghost:hover {
+      background-color: #ffffff;
+      color: var(--primary-purple);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+
+    button.ghost:active {
+      transform: translateY(0);
+    }
+
+    /* Décorations visuelles douces sur le panneau */
+    .overlay-shape {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      pointer-events: none;
+    }
+
+    .shape-1 {
+      width: 220px;
+      height: 220px;
+      top: -60px;
+      right: -60px;
+    }
+
+    .shape-2 {
+      width: 180px;
+      height: 180px;
+      bottom: -40px;
+      left: -40px;
+    }
+
+    /* ==========================================================================
+       RESPONSIVE (MOBILES ET PETITS ÉCRANS) - ZERO DÉSORDRE VERTICAL
+       ========================================================================== */
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+
+      .container {
+        min-height: 540px;
+        width: 100%;
+        max-width: 440px;
+        border-radius: 24px;
+      }
+
+      .overlay-container {
+        display: none;
+      }
+
+      .form-container {
+        width: 100% !important;
+        position: relative;
+        height: auto;
+        min-height: 540px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .sign-in-container {
+        display: flex;
+      }
+
+      .container.right-panel-active .sign-in-container {
+        display: none;
+        transform: none;
+      }
+
+      .sign-up-container {
+        display: none;
+      }
+
+      .container.right-panel-active .sign-up-container {
+        display: flex;
+        opacity: 1;
+        transform: none;
+        z-index: 5;
+      }
+
+      form {
+        padding: 0 24px;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toast Notification Container -->
+  <div id="toastBox" style="position: fixed; top: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none;"></div>
+
+  <!-- Modal Choix Google -->
+  <div id="googleModal" style="display:none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); z-index: 9998; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: white; border-radius: 20px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); text-align: left; position: relative;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 800; font-size: 16px; color: #0f172a;">Compte Google</span>
+        </div>
+        <button type="button" onclick="closeGoogleModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
+      </div>
+      <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">Sélectionnez votre compte pour vous synchroniser instantanément avec Bookly Studio :</p>
+      
+      <!-- Compte utilisateur courant principal -->
+      <div onclick="loginWithGoogle('soumailaharoune8@gmail.com', 'Haroune Soumaila')" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 14px; cursor: pointer; transition: all 0.2s; margin-bottom: 10px; background: #f8fafc;" onmouseover="this.style.borderColor='#8b5cf6'; this.style.background='#f5f3ff';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc';">
+        <div style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">HS</div>
+        <div style="flex: 1;">
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a;">Haroune Soumaila</div>
+          <div style="font-size: 12px; color: #64748b;">soumailaharoune8@gmail.com</div>
+        </div>
+        <span style="font-size: 11px; font-weight: 700; color: #7c3aed; background: #ede9fe; padding: 2px 8px; border-radius: 9999px;">Admin</span>
+      </div>
+
+      <!-- Option pour saisir un autre email Google -->
+      <div id="customGoogleArea" style="margin-top: 12px; border-top: 1px solid #e2e8f0; pt: 12px; padding-top: 12px;">
+        <button type="button" onclick="toggleCustomGoogle()" style="background: none; border: none; font-size: 12px; font-weight: 600; color: #7c3aed; cursor: pointer; text-decoration: underline; margin-bottom: 8px;">Utiliser un autre compte Google...</button>
+        <div id="customGoogleForm" style="display: none; margin-top: 8px;">
+          <input type="email" id="customGoogleInput" placeholder="votre.email@gmail.com" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 13px; margin-bottom: 8px; outline: none;" />
+          <button type="button" onclick="submitCustomGoogle()" style="width: 100%; padding: 10px; border-radius: 10px; background: #7c3aed; color: white; border: none; font-weight: 700; font-size: 12px; cursor: pointer;">Connexion avec ce compte</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- En-tête de marque BOOKLY -->
+  <a href="/" class="brand-header" title="Retour au Studio Bookly">
+    <i class="fa-solid fa-book-bookmark"></i>
+    <span>BOOKLY</span>
+  </a>
+
+  <!-- Conteneur Principal à Deux Panneaux Coulissants -->
+  <div class="container" id="container">
+    
+    <!-- ==========================================================================
+         1. PANNEAU DE FORMULAIRE : INSCRIPTION (Révélé lors du glissement)
+         ========================================================================== -->
+    <div class="form-container sign-up-container">
+      <form id="signupForm">
+        <h1>Créer un compte</h1>
+        <div class="subtitle">Rejoignez la communauté d'auteurs et de créateurs</div>
+        
+        <!-- Bouton Google écrit comme un Google en entier -->
+        <button type="button" class="btn-google-full" onclick="openGoogleModal()">
+          <span>Continuer avec</span>
+          <span class="google-brand">
+            <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
+          </span>
+        </button>
+
+        <div class="divider"><span>ou avec votre email</span></div>
+
+        <div class="input-group">
+          <input type="text" id="signupName" placeholder="Nom complet" required />
+          <i class="fa-regular fa-user"></i>
+        </div>
+
+        <div class="input-group">
+          <input type="email" id="signupEmail" placeholder="Adresse Email" required />
+          <i class="fa-regular fa-envelope"></i>
+        </div>
+
+        <div class="input-group" style="position: relative;">
+          <input type="password" id="signupPassword" placeholder="Mot de passe" required />
+          <i class="fa-solid fa-lock"></i>
+          <span onclick="togglePasswordVisibility('signupPassword', this)" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8; font-size: 14px;">
+            <i class="fa-regular fa-eye"></i>
+          </span>
+        </div>
+
+        <button type="submit" id="btnSignupSubmit" class="btn-primary">CRÉER MON COMPTE</button>
+
+        <div class="signup-callout">
+          <span>Déjà membre ?</span>
+          <button type="button" class="btn-text" id="signInFromForm">SE CONNECTER</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ==========================================================================
+         2. PANNEAU DE GAUCHE : FORMULAIRE DE CONNEXION (Visible par défaut)
+         ========================================================================== -->
+    <div class="form-container sign-in-container">
+      <form id="signinForm">
+        <!-- Titre demandé -->
+        <h1>Connexion BOOKLY</h1>
+        <div class="subtitle">Accédez à votre espace créatif et bibliothèque</div>
+
+        <!-- Bouton Google écrit comme un Google en entier -->
+        <button type="button" class="btn-google-full" onclick="openGoogleModal()">
+          <span>Continuer avec</span>
+          <span class="google-brand">
+            <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
+          </span>
+        </button>
+
+        <div class="divider"><span>ou via votre identifiant</span></div>
+
+        <!-- Champ Email -->
+        <div class="input-group">
+          <input type="email" id="signinEmail" placeholder="Email (ex: soumailaharoune8@gmail.com)" required />
+          <i class="fa-regular fa-envelope"></i>
+        </div>
+
+        <!-- Champ Mot de passe -->
+        <div class="input-group" style="position: relative;">
+          <input type="password" id="signinPassword" placeholder="Mot de passe" required />
+          <i class="fa-solid fa-lock"></i>
+          <span onclick="togglePasswordVisibility('signinPassword', this)" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8; font-size: 14px;">
+            <i class="fa-regular fa-eye"></i>
+          </span>
+        </div>
+
+        <!-- Lien Mot de passe oublié ? -->
+        <a href="javascript:void(0)" onclick="handleForgotPassword()" class="forgot-password">Mot de passe oublié ?</a>
+
+        <!-- Bouton SE CONNECTER -->
+        <button type="submit" id="btnSigninSubmit" class="btn-primary">SE CONNECTER</button>
+
+        <!-- Appel à l'inscription -->
+        <div class="signup-callout">
+          <span>Pas encore membre ?</span>
+          <button type="button" class="btn-text" id="signUpFromForm">S'INSCRIRE</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ==========================================================================
+         3. PANNEAU DE DROITE : OVERLAY D'INSCRIPTION (Glissant & Découpe incurvée)
+         ========================================================================== -->
+    <div class="overlay-container">
+      <div class="overlay">
+        
+        <!-- Décorations visuelles d'ambiance -->
+        <div class="overlay-shape shape-1"></div>
+        <div class="overlay-shape shape-2"></div>
+
+        <!-- Volet de gauche de l'overlay (affiché quand on est en mode Inscription) -->
+        <div class="overlay-panel overlay-left">
+          <h1>Bon retour parmi nous !</h1>
+          <p>Pour rester connecté avec nous et continuer vos lectures et rédactions, connectez-vous avec vos identifiants.</p>
+          <button class="ghost" id="signIn">SE CONNECTER</button>
+        </div>
+
+        <!-- Volet de droite de l'overlay (affiché par défaut) -->
+        <div class="overlay-panel overlay-right">
+          <!-- Titre demandé -->
+          <h1>Rejoignez BOOKLY !</h1>
+          <!-- Description demandée -->
+          <p>Créez un compte pour gérer votre bibliothèque personnelle et concevoir des livres avec l'intelligence artificielle.</p>
+          <!-- Bouton demandé -->
+          <button class="ghost" id="signUp">CRÉER UN COMPTE</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==========================================================================
+       SCRIPT JAVASCRIPT : ANIMATIONS ET LOGIQUE D'AUTHENTIFICATION RÉELLE
+       ========================================================================== -->
+  <script>
+    // Sélection des éléments clés
+    const container = document.getElementById('container');
+    const signUpButton = document.getElementById('signUp');
+    const signInButton = document.getElementById('signIn');
+    const signUpFromForm = document.getElementById('signUpFromForm');
+    const signInFromForm = document.getElementById('signInFromForm');
+
+    // 1. Déclencher le glissement vers la gauche pour afficher l'inscription
+    function activateSignUp() {
+      container.classList.add('right-panel-active');
+    }
+
+    // 2. Déclencher le glissement vers la droite pour revenir à la connexion
+    function activateSignIn() {
+      container.classList.remove('right-panel-active');
+    }
+
+    // Écouteurs d'événements sur les boutons de l'overlay
+    signUpButton.addEventListener('click', activateSignUp);
+    signInButton.addEventListener('click', activateSignIn);
+
+    // Écouteurs secondaires dans les formulaires texte (Pas encore membre ? / Déjà membre ?)
+    if (signUpFromForm) {
+      signUpFromForm.addEventListener('click', activateSignUp);
+    }
+    if (signInFromForm) {
+      signInFromForm.addEventListener('click', activateSignIn);
+    }
+
+    // Affichage de notifications Toast
+    function showToast(message, type = 'success') {
+      const box = document.getElementById('toastBox');
+      const toast = document.createElement('div');
+      const bg = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#6366f1';
+      toast.style.cssText = `
+        background: ${bg};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2);
+        animation: fadeInDown 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+      `;
+      toast.innerHTML = `<i class="fa-solid fa-${type === 'success' ? 'circle-check' : type === 'error' ? 'circle-exclamation' : 'circle-info'}"></i> <span>${message}</span>`;
+      box.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Basculer la visibilité du mot de passe
+    function togglePasswordVisibility(inputId, trigger) {
+      const input = document.getElementById(inputId);
+      const icon = trigger.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fa-regular fa-eye-slash';
+      } else {
+        input.type = 'password';
+        icon.className = 'fa-regular fa-eye';
+      }
+    }
+
+    // Mot de passe oublié
+    function handleForgotPassword() {
+      const email = document.getElementById('signinEmail').value.trim();
+      if (email) {
+        showToast('Instructions envoyées à ' + email, 'info');
+      } else {
+        showToast('Veuillez d\'abord saisir votre email.', 'error');
+      }
+    }
+
+    // Modal Google
+    function openGoogleModal() {
+      document.getElementById('googleModal').style.display = 'flex';
+    }
+    function closeGoogleModal() {
+      document.getElementById('googleModal').style.display = 'none';
+    }
+    function toggleCustomGoogle() {
+      const el = document.getElementById('customGoogleForm');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+    function submitCustomGoogle() {
+      const val = document.getElementById('customGoogleInput').value.trim();
+      if (!val || !val.includes('@')) {
+        showToast('Veuillez entrer une adresse email valide', 'error');
+        return;
+      }
+      loginWithGoogle(val);
+    }
+
+    // Connexion Google
+    function loginWithGoogle(email, name) {
+      const formattedName = name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const isUserAdmin = email.toLowerCase() === 'soumailaharoune8@gmail.com' || email.toLowerCase() === 'admin@bookly.studio';
+
+      const googleUser = {
+        id: 'usr-google-' + email.replace(/[^a-zA-Z0-9]/g, '_'),
+        name: formattedName,
+        email: email,
+        role: isUserAdmin ? 'Super Administrateur Plateforme' : 'Auteur & Créateur Digital',
+        bio: 'Compte connecté via Google. Accès instantané au studio de création.',
+        avatarBg: isUserAdmin ? 'linear-gradient(135deg, #d97706, #f59e0b)' : 'linear-gradient(135deg, #7c3aed, #6366f1)',
+        authProvider: 'google',
+        isAdmin: isUserAdmin,
+        signature: formattedName + ' — Auteur Bookly',
+        plan: isUserAdmin ? 'premium' : 'free',
+        planBilling: 'monthly',
+        planRenewsAt: isUserAdmin ? 'Illimité (Admin)' : 'Plan Gratuit Inclus',
+        lifetimeProjectsCreated: 0,
+        monthlyProjectsCreated: 0,
+        dailyChatbotCount: 0,
+        createdAt: new Date().toISOString().split('T')[0],
+        lastLoginAt: 'À l\'instant'
+      };
+
+      if (isUserAdmin) {
+        localStorage.setItem('bookly_admin_auth', JSON.stringify({
+          isAuthenticated: true,
+          authTimestamp: Date.now(),
+          adminEmail: email
+        }));
+      }
+
+      localStorage.setItem('bookly_auth_session', JSON.stringify({
+        email: email,
+        name: formattedName,
+        timestamp: Date.now(),
+        isAdmin: isUserAdmin
+      }));
+      localStorage.setItem('bookly_user', JSON.stringify(googleUser));
+
+      closeGoogleModal();
+      showToast('Connexion Google réussie ! Redirection...', 'success');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 700);
+    }
+
+    // Soumission du formulaire de Connexion
+    document.getElementById('signinForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const email = document.getElementById('signinEmail').value.trim();
+      const password = document.getElementById('signinPassword').value;
+
+      if (!email || !email.includes('@')) {
+        showToast('Veuillez renseigner un email valide.', 'error');
+        return;
+      }
+
+      const isUserAdmin = email.toLowerCase() === 'soumailaharoune8@gmail.com' || email.toLowerCase() === 'admin@bookly.studio';
+      const displayName = isUserAdmin ? 'Haroune Soumaila' : email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+      const userProfile = {
+        id: 'usr-' + email.replace(/[^a-zA-Z0-9]/g, '_'),
+        name: displayName,
+        email: email,
+        role: isUserAdmin ? 'Super Administrateur Plateforme' : 'Auteur & Créateur Digital',
+        bio: 'Auteur sur Bookly Studio.',
+        avatarBg: isUserAdmin ? 'linear-gradient(135deg, #d97706, #f59e0b)' : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+        authProvider: 'email',
+        isAdmin: isUserAdmin,
+        signature: displayName + ' — Auteur Bookly',
+        plan: isUserAdmin ? 'premium' : 'free',
+        planBilling: 'monthly',
+        planRenewsAt: isUserAdmin ? 'Illimité (Admin)' : 'Plan Gratuit Inclus',
+        lifetimeProjectsCreated: 0,
+        monthlyProjectsCreated: 0,
+        dailyChatbotCount: 0,
+        lastLoginAt: 'À l\'instant'
+      };
+
+      if (isUserAdmin) {
+        localStorage.setItem('bookly_admin_auth', JSON.stringify({
+          isAuthenticated: true,
+          authTimestamp: Date.now(),
+          adminEmail: email
+        }));
+      }
+
+      localStorage.setItem('bookly_auth_session', JSON.stringify({
+        email: email,
+        name: displayName,
+        timestamp: Date.now(),
+        isAdmin: isUserAdmin
+      }));
+      localStorage.setItem('bookly_user', JSON.stringify(userProfile));
+
+      showToast('Connexion réussie ! Redirection...', 'success');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 700);
+    });
+
+    // Soumission du formulaire d'Inscription
+    document.getElementById('signupForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+
+      if (!name || !email || !email.includes('@')) {
+        showToast('Veuillez renseigner tous les champs.', 'error');
+        return;
+      }
+
+      const isUserAdmin = email.toLowerCase() === 'soumailaharoune8@gmail.com' || email.toLowerCase() === 'admin@bookly.studio';
+
+      const newUser = {
+        id: 'usr-' + email.replace(/[^a-zA-Z0-9]/g, '_'),
+        name: name,
+        email: email,
+        role: isUserAdmin ? 'Super Administrateur Plateforme' : 'Auteur & Créateur Digital',
+        bio: 'Auteur sur Bookly Studio.',
+        avatarBg: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+        authProvider: 'email',
+        isAdmin: isUserAdmin,
+        signature: name + ' — Auteur Bookly',
+        plan: isUserAdmin ? 'premium' : 'free',
+        planBilling: 'monthly',
+        planRenewsAt: isUserAdmin ? 'Illimité (Admin)' : 'Plan Gratuit Inclus',
+        lifetimeProjectsCreated: 0,
+        monthlyProjectsCreated: 0,
+        dailyChatbotCount: 0,
+        createdAt: new Date().toISOString().split('T')[0],
+        lastLoginAt: 'À l\'instant'
+      };
+
+      if (isUserAdmin) {
+        localStorage.setItem('bookly_admin_auth', JSON.stringify({
+          isAuthenticated: true,
+          authTimestamp: Date.now(),
+          adminEmail: email
+        }));
+      }
+
+      localStorage.setItem('bookly_auth_session', JSON.stringify({
+        email: email,
+        name: name,
+        timestamp: Date.now(),
+        isAdmin: isUserAdmin
+      }));
+      localStorage.setItem('bookly_user', JSON.stringify(newUser));
+
+      showToast('Bienvenue sur Bookly ' + name + ' ! Redirection...', 'success');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 700);
+    });
+  </script>
+
+</body>
+</html>

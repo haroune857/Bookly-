@@ -1,5 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -15,64 +13,9 @@ export interface GeneratedChapter {
   completed: boolean;
 }
 
-const DEFAULT_GROQ_KEY = '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';
-
-const GROQ_CANDIDATE_MODELS = [
-  'qwen/qwen3.8-27b',
-  'groq/compound',
-  'openai/gpt-oss-120b',
-  'openai/gpt-oss-20b',
-  'qwen/qwen3.6-27b'
-];
-
 function cleanAiOutput(text: string): string {
   if (!text) return '';
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-}
-
-// Helper to call Groq API directly if server route is unreachable
-async function callGroqDirectly(
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-  jsonMode: boolean = false
-): Promise<{ text: string; model: string }> {
-  const apiKey = (import.meta as any).env?.VITE_GROQ_API_KEY || DEFAULT_GROQ_KEY;
-
-  let lastError: any = null;
-  for (const model of GROQ_CANDIDATE_MODELS) {
-    try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.7,
-          max_tokens: jsonMode ? 4000 : 3000,
-          ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawContent = data.choices?.[0]?.message?.content || '';
-        const cleaned = jsonMode ? rawContent : cleanAiOutput(rawContent);
-        if (cleaned) {
-          return { text: cleaned, model };
-        }
-      } else {
-        const errText = await res.text();
-        console.warn(`Groq direct model ${model} failed (${res.status}):`, errText);
-      }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`Groq direct model ${model} exception:`, err.message);
-    }
-  }
-
-  throw lastError || new Error('All Groq candidate models failed');
 }
 
 // 1. Chat & Conversational Brainstorming
@@ -81,7 +24,7 @@ export async function generateBrainstormChat(
   newMessage: string,
   context?: string
 ): Promise<{ text: string; source: 'groq' | 'gemini' | 'studio_generator'; model?: string }> {
-  // First try backend API route
+  // Proxied through server route: all API keys remain 100% server-side and secure
   try {
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
@@ -101,80 +44,17 @@ export async function generateBrainstormChat(
       const data = await response.json();
       if (data.success && data.text) {
         return {
-          text: data.text,
+          text: cleanAiOutput(data.text),
           source: data.source || 'groq',
-          model: data.model || 'qwen/qwen3.8-27b'
+          model: data.model || 'llama-3.3-70b-versatile'
         };
       }
     }
   } catch (err) {
-    console.warn('Backend /api/ai/chat unreachable, trying direct Groq AI:', err);
+    console.warn('Backend /api/ai/chat unreachable, using local editorial assistant:', err);
   }
 
-  // Direct Groq fallback
-  try {
-    const systemPrompt = `Tu es le Conseiller Éditorial, Sparring Partner et Mentor en Création de Livres & E-books de Bookly Studio.
-Ton rôle est d'aider le créateur ou l'auteur à RÉFLÉCHIR, débattre, clarifier, structurer ses idées et bâtir des ouvrages à fort impact et forte valeur perçue (notamment monétisables sur Chariow, Mobile Money, WhatsApp, Amazon KDP, formations en ligne).
-
-Postures et principes clés :
-1. **Écoute & Dialogue actif** : Accueille chaque idée avec enthousiasme. Rebondis avec perspicacité et franchise constructive.
-2. **Clarification & Questionnement** : Pose des questions stimulantes pour aider l'auteur à trouver son angle unique, sa promesse centrale et son audience cible.
-3. **Propositions concrètes** : Propose des titres magnétiques, des plans de chapitres détaillés, des structures narratives ou des exercices pratiques.
-4. **Formatage soigné** : Rédige toujours en français avec un Markdown très lisible (titres ###, puces claires, gras sur les concepts clés, encadrés de conseils).
-5. **Esprit de co-création** : Reste un sparring partner intellectuel qui encourage et fait progresser la réflexion pas à pas.${
-      context ? `\n\nContexte actuel du projet:\n${context}` : ''
-    }`;
-
-    const formattedMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: systemPrompt },
-      ...history.slice(-10).map((m) => ({
-        role: (m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
-        content: m.content
-      })),
-      { role: 'user', content: newMessage }
-    ];
-
-    const { text, model } = await callGroqDirectly(formattedMessages);
-    if (text) {
-      return { text, source: 'groq', model };
-    }
-  } catch (groqErr) {
-    console.warn('Direct Groq error, attempting Gemini/smart fallback:', groqErr);
-  }
-
-  // Gemini Fallback if available
-  const geminiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const contents = [
-        ...history.slice(-8).map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }]
-        })),
-        { role: 'user', parts: [{ text: newMessage }] }
-      ];
-
-      for (const m of ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']) {
-        try {
-          const response = await ai.models.generateContent({
-            model: m,
-            contents
-          });
-
-          if (response.text) {
-            return { text: response.text, source: 'gemini', model: m };
-          }
-        } catch (mErr) {
-          console.warn(`Gemini model ${m} failed in direct call:`, mErr);
-        }
-      }
-    } catch (gemErr) {
-      console.warn('Gemini chat error:', gemErr);
-    }
-  }
-
-  // Smart local editorial response fallback
+  // Safe client editorial fallback
   return {
     source: 'studio_generator',
     text: generateFallbackBrainstormText(history, newMessage)
@@ -221,86 +101,10 @@ export async function generateAiContent(options: {
       }
     }
   } catch (err) {
-    console.warn('Backend /api/ai/generate unreachable, trying direct Groq:', err);
+    console.warn('Backend /api/ai/generate unreachable, using local editorial studio:', err);
   }
 
-  // 2. Direct Groq fallback
-  try {
-    let systemPrompt = "Tu es l'assistant IA d'élite de Bookly Studio, spécialisé dans la rédaction d'e-books captivants et de guides professionnels.";
-    let userPrompt = prompt || '';
-
-    if (type === 'brainstorm') {
-      systemPrompt = "Tu es un Directeur de Publication et Stratège en Infoproduits pour Bookly Studio.";
-      userPrompt = `Génère 5 concepts d'e-books percutants et à fort potentiel commercial sur le thème : "${cleanTopic}".
-Audience ciblée : "${audience || 'Entrepreneurs, créateurs et professionnels'}".
-Tonalité : "${tone || 'Inspirant et pragmatique'}".
-Instructions spécifiques : "${customInstructions || 'Rendre actionnable et adapté au marché moderne'}"
-
-Pour chaque concept, donne :
-1. Titre magnétique & accrocheur
-2. Sous-titre explicite (promesse concrète)
-3. Genre & Catégorie
-4. Résumé en 2-3 phrases percutantes
-5. Sommaire des 4 grands chapitres clés
-6. Facteur de différenciation
-
-Formate la réponse en Markdown impeccable avec émoticônes et structure lisible en français.`;
-    } else if (type === 'outline') {
-      systemPrompt = "Tu es un Architecte Littéraire et Concepteur de Sommaires pour Bookly Studio.";
-      userPrompt = `Conçois un sommaire complet et détaillé pour l'ouvrage suivant :
-Titre du livre : "${cleanTopic}"
-Audience visée : "${audience || 'Grand public et passionnés'}"
-Nombre de chapitres : ${chaptersCount || 5} chapitres
-Tonalité : "${tone || 'Professionnel, captivant et clair'}"
-Instructions particulières : "${customInstructions || 'Inclure des méthodes concrètes, études de cas et exercices'}"
-
-Pour chaque chapitre (du Chapitre 1 au Chapitre ${chaptersCount || 5}) :
-- Titre clair et engageant
-- 3 sous-sections détaillées (1.1, 1.2, 1.3)
-- L'objectif pédagogique / résultat pour le lecteur
-- Un conseil clé de rédaction ou une idée d'exercice pratique
-
-Réponds en français avec une structure Markdown soignée.`;
-    } else if (type === 'chapter' || type === 'continue') {
-      systemPrompt = "Tu es un Auteur Émérite et Rédacteur Professionnel (Ghostwriter) pour Bookly Studio.";
-      userPrompt = `Rédige un contenu riche, captivant et structuré pour le chapitre suivant :
-Titre du livre : "${cleanTopic}"
-Sujet / Titre du chapitre : "${prompt || 'Chapitre de contenu'}"
-Tonalité : "${tone || 'Professionnel, engageant, bienveillant et fluide'}"
-Instructions : "${customInstructions || 'Fournir un texte complet (600 à 900 mots), prêt pour un manuscrit de haute qualité'}"
-
-Le chapitre doit contenir :
-- Une introduction percutante avec mise en situation ou citation inspirante
-- 2 à 3 sections de développement approfondies avec sous-titres (####)
-- Des exemples concrets et des conseils pratiques immédiatement applicables
-- Un encadré "💡 Action Immédiate" ou "Exercice d'application"
-- Une brève conclusion / transition vers la suite
-
-Rédige directement le contenu du chapitre en Markdown français fluide.`;
-    } else if (type === 'rewrite') {
-      systemPrompt = "Tu es un Styliste Littéraire et Éditeur en Chef pour Bookly Studio.";
-      userPrompt = `Améliore, enrichis et reformule le texte suivant pour lui donner un style captivant, élégant et professionnel, tout en préservant le sens initial :\n\n${prompt}\n\nTonalité souhaitée : ${tone || 'Élégant, percutant et fluide'}.`;
-    } else if (type === 'expand') {
-      systemPrompt = "Tu es un Rédacteur Créatif pour Bookly Studio.";
-      userPrompt = `Développe et approfondis le passage suivant en y ajoutant des analogies parlantes, des exemples pratiques concrets, des détails pertinents et des explications pas-à-pas :\n\n${prompt}`;
-    } else if (type === 'summarize') {
-      systemPrompt = "Tu es un Éditeur Synthétique pour Bookly Studio.";
-      userPrompt = `Fais une synthèse percutante en 4 ou 5 points essentiels du texte suivant, avec les enseignements clés pour le lecteur :\n\n${prompt}`;
-    }
-
-    const { text: reply, model } = await callGroqDirectly([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ]);
-
-    if (reply) {
-      return { text: reply, source: 'groq', model };
-    }
-  } catch (groqErr) {
-    console.warn('Direct Groq error in generateAiContent:', groqErr);
-  }
-
-  // 3. Smart local template fallback
+  // 2. Smart local template fallback
   if (type === 'brainstorm') {
     return {
       source: 'studio_generator',
@@ -456,58 +260,7 @@ export async function generateFullBookWithAi(options: {
       }
     }
   } catch (err) {
-    console.warn('Backend /api/ai/generate-book error, falling back to direct Groq:', err);
-  }
-
-  // Direct Groq JSON Generation
-  try {
-    const promptForOutline = `Tu es un Directeur Éditorial d'élite pour Bookly.
-Crée la structure exacte et complète d'un livre intitulé "${title}" (${subtitle ? `Sous-titre: ${subtitle}` : ''}).
-Catégorie : ${category || 'Infoproduit & Business'}
-Auteur : ${author || 'Auteur Bookly'}
-Audience : ${audience || 'Créateurs et Professionnels'}
-Ton : ${tone || 'Inspirant, pragmatique et structuré'}
-Nombre de chapitres : exactement ${chaptersCount} chapitres.
-
-Génère une réponse au format JSON strict avec la structure suivante :
-{
-  "chapters": [
-    {
-      "number": 1,
-      "title": "Titre du chapitre 1",
-      "content": "Contenu complet en Markdown rédigé pour ce chapitre (minimum 350 mots avec sous-titres ###, conseils pratiques, exemples, et conclusion)"
-    }
-  ]
-}
-
-Assure-toi que le JSON est 100% valide et sans texte avant ou après. Rédige un contenu riche, captivant et directement publiable en français pour chaque chapitre.`;
-
-    const { text: rawJson } = await callGroqDirectly(
-      [
-        { role: 'system', content: 'Tu es un générateur de livres au format JSON strict.' },
-        { role: 'user', content: promptForOutline }
-      ],
-      true
-    );
-
-    const parsed = JSON.parse(rawJson);
-    if (parsed.chapters && Array.isArray(parsed.chapters) && parsed.chapters.length > 0) {
-      const generatedChapters: GeneratedChapter[] = parsed.chapters.map((ch: any, i: number) => {
-        const content = ch.content || `### ${ch.title || `Chapitre ${i + 1}`}\n\nContenu généré par l'IA.`;
-        const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
-        return {
-          id: `ch-ai-${Date.now()}-${i + 1}`,
-          title: ch.title || `Chapitre ${i + 1}`,
-          content,
-          wordCount,
-          completed: i === 0
-        };
-      });
-
-      return { chapters: generatedChapters, source: 'groq_direct' };
-    }
-  } catch (groqErr) {
-    console.warn('Direct Groq JSON book generation error:', groqErr);
+    console.warn('Backend /api/ai/generate-book error, falling back to local book architecture:', err);
   }
 
   // Fallback structured generation

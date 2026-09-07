@@ -79,6 +79,10 @@
     "/admin_config/{configId}": {
       "schema": { "$ref": "#/entities/AdminConfig" },
       "description": "Global platform configurations"
+    },
+    "/test/{testId}": {
+      "schema": { "$ref": "#/entities/AdminConfig" },
+      "description": "Probe path for verifying backend Firestore connectivity"
     }
   }
 }

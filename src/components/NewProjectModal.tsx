@@ -33,6 +33,7 @@ import {
 import { EBOOK_COVER_TEMPLATES, COVER_CATEGORIES, getCoverTemplateById } from '../data/coverTemplatesData';
 import { EbookCoverThumbnail } from './EbookCoverThumbnail';
 import { CoverGalleryModal } from './CoverGalleryModal';
+import { checkCanCreateProject } from '../services/subscriptionService';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -107,15 +108,11 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
     title: ''
   });
 
-  // Free plan limits verification
-  const isFreePlan = user?.plan === 'free';
-  const lifetimeProjectsCount = user?.lifetimeProjectsCreated ?? projects.length;
-  const activeProjectsCount = projects.filter(
-    (p) => p.status === 'in_progress' || p.status === 'ai_generating' || p.status === 'draft'
-  ).length;
-
-  const isLifetimeQuotaReached = isFreePlan && lifetimeProjectsCount >= 5;
-  const isSimultaneousQuotaReached = isFreePlan && activeProjectsCount >= 1;
+  // Subscription plan limits verification (strict single source of truth)
+  const planCheck = checkCanCreateProject(user, projects.length);
+  const isCreationBlocked = !planCheck.allowed;
+  const isLifetimeQuotaReached = !planCheck.allowed && planCheck.limitType === 'lifetime';
+  const isSimultaneousQuotaReached = !planCheck.allowed && (planCheck.limitType === 'active' || planCheck.limitType === 'total');
 
   // Selected cover template
   const currentCoverTemplate = getCoverTemplateById(selectedTemplateId);
@@ -152,7 +149,10 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
   // Move from Step 1 to Step 2
   const handleProceedToOutline = async () => {
-    if (isLifetimeQuotaReached || isSimultaneousQuotaReached) return;
+    if (isCreationBlocked) {
+      onShowToast('Limite d\'e-book atteinte', planCheck.reason || 'Limite atteinte.', 'error');
+      return;
+    }
 
     if (!title.trim()) {
       onShowToast('Titre requis', 'Veuillez renseigner le titre de votre ouvrage.', 'error');
@@ -361,6 +361,10 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
   // Finalize Project Creation
   const handleFinalizeProject = (chaptersListOverride?: DraftChapterItem[]) => {
+    if (isCreationBlocked) {
+      onShowToast('Limite d\'e-book atteinte', planCheck.reason || 'Limite atteinte.', 'error');
+      return;
+    }
     const listToUse = chaptersListOverride || draftChapters;
     
     const finalChapters: Chapter[] = listToUse.map((ch, i) => {

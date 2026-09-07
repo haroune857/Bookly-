@@ -206,27 +206,44 @@ export const INITIAL_TRAINING_COURSES: TrainingCourse[] = [
 ];
 
 export const INITIAL_USER: UserProfile = {
+  id: 'usr-guest',
+  name: 'Nouvel Auteur',
+  email: '',
+  role: 'Auteur Indépendant',
+  bio: 'Passionné d\'écriture et de création d\'e-books numériques sur Bookly Studio.',
+  avatarBg: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+  authProvider: 'email',
+  isAdmin: false,
+  signature: 'Auteur Bookly',
+  plan: 'free',
+  planBilling: 'monthly',
+  planRenewsAt: 'Non applicable',
+  lifetimeProjectsCreated: 0,
+  monthlyProjectsCreated: 0,
+  dailyChatbotCount: 0,
+  createdAt: '2026-09-05'
+};
+
+export const ADMIN_USER_PROFILE: UserProfile = {
   id: 'usr-admin-studio',
-  name: 'Alexandre (Administrateur Bookly)',
-  email: 'admin@bookly.studio',
+  name: 'Administrateur Bookly',
+  email: 'admin.studio@bookly.internal',
   role: 'Super Administrateur Plateforme',
-  bio: 'Gestionnaire système Bookly Studio, contrôle des accès API, modération et monitoring de la plateforme.',
+  bio: 'Gestionnaire système Bookly Studio, contrôle des accès et supervision.',
   avatarBg: 'linear-gradient(135deg, #d97706, #f59e0b)',
   authProvider: 'email',
   isAdmin: true,
-  signature: 'Admin Bookly Studio',
+  signature: 'Direction Bookly Studio',
   plan: 'premium',
   planBilling: 'yearly',
   planRenewsAt: 'Illimité (Admin)',
   lifetimeProjectsCreated: 0,
   monthlyProjectsCreated: 0,
   dailyChatbotCount: 0,
-  createdAt: '2026-08-30'
+  createdAt: '2026-09-05'
 };
 
-export const PRESET_ACCOUNTS: UserProfile[] = [
-  INITIAL_USER
-];
+export const PRESET_ACCOUNTS: UserProfile[] = [];
 
 export const INITIAL_SETTINGS: AppSettings = {
   darkMode: false,
