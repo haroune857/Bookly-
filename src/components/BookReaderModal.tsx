@@ -16,7 +16,8 @@ import {
   Maximize2,
   Minimize2
 } from 'lucide-react';
-import { LibraryBook, Project } from '../types';
+import { LibraryBook, Project, Chapter } from '../types';
+import { EbookCoverThumbnail } from './EbookCoverThumbnail';
 import {
   cleanAndFormatTextToHtml,
   stripMarkdownToPureText,
@@ -52,10 +53,14 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const totalPages = bookStructure.totalPages;
   const currentPage = bookStructure.pages[currentPageIdx] || bookStructure.pages[0];
 
-  const currentChapter = chaptersList[currentChapterIdx] || chaptersList[0] || {
+  const currentChapter: Chapter = chaptersList[currentChapterIdx] || chaptersList[0] || {
     id: 'ch-0',
     title: book.title,
-    content: 'Aucun contenu disponible pour ce chapitre.'
+    content: 'Aucun contenu disponible pour ce chapitre.',
+    wordCount: 0,
+    completed: true,
+    illustrationUrl: undefined,
+    illustrationCaption: undefined
   };
 
   const progressPercent = Math.round(((currentPageIdx + 1) / totalPages) * 100);
@@ -309,27 +314,26 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 style={{ fontSize: `${fontSize}px` }}
               >
                 {currentPage.isCover ? (
-                  /* COVER PAGE */
-                  <div
-                    className="flex-1 flex flex-col justify-between text-center p-8 rounded-2xl text-white my-auto min-h-[480px]"
-                    style={{ background: bookStructure.coverGradient || 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)' }}
-                  >
-                    <div className="text-xs font-sans font-black uppercase tracking-widest text-indigo-200">
-                      {bookStructure.category}
-                    </div>
-                    <div className="space-y-3 py-10">
-                      <h1 className="text-2xl sm:text-4xl font-serif font-black leading-tight">
-                        {bookStructure.title}
-                      </h1>
-                      {bookStructure.subtitle && (
-                        <p className="text-sm sm:text-base font-serif italic text-slate-200 max-w-md mx-auto">
-                          {bookStructure.subtitle}
-                        </p>
-                      )}
-                    </div>
-                    <div className="border-t border-white/20 pt-4 font-sans">
-                      <div className="text-sm font-bold">{bookStructure.author}</div>
-                      <div className="text-xs opacity-75">Éditions Bookly Studio • Manuscrit A4</div>
+                  /* COVER PAGE WITH ULTRA-HD COVER ARTWORK */
+                  <div className="flex-1 flex flex-col items-center justify-center my-auto min-h-[480px] w-full py-4">
+                    <div className="w-full max-w-md aspect-[1/1.414] rounded-2xl overflow-hidden shadow-2xl border border-white/20 relative">
+                      <EbookCoverThumbnail
+                        project={book as any}
+                        title={bookStructure.title}
+                        subtitle={bookStructure.subtitle}
+                        author={bookStructure.author}
+                        category={bookStructure.category}
+                        templateId={bookStructure.coverTemplateId}
+                        customGradient={bookStructure.coverGradient}
+                        customImage={bookStructure.coverCustomImage}
+                        size="full"
+                        showBadge={true}
+                        showAuthor={true}
+                        showChaptersCount={true}
+                        chaptersCount={bookStructure.chapters.length}
+                        showSpine={true}
+                        className="w-full h-full"
+                      />
                     </div>
                   </div>
                 ) : currentPage.isToc ? (
@@ -372,32 +376,59 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 ) : (
                   /* REGULAR CONTENT PAGE */
                   <div className="flex-1 flex flex-col justify-between space-y-6">
-                    <div className="flex justify-between items-center border-b pb-2 font-sans text-xs uppercase font-bold opacity-50">
-                      <span className="truncate max-w-[240px]">{bookStructure.title}</span>
-                      <span className="truncate max-w-[240px]">{stripMarkdownToPureText(currentPage.chapterTitle)}</span>
+                    <div className="flex justify-between items-center border-b pb-2.5 font-sans text-[11px] uppercase tracking-wider font-bold opacity-60">
+                      <span className="truncate max-w-[240px] font-serif">{bookStructure.title}</span>
+                      <span className="truncate max-w-[240px] text-indigo-600 dark:text-indigo-400">{stripMarkdownToPureText(currentPage.chapterTitle)}</span>
                     </div>
 
-                    <div className="space-y-4 font-serif leading-relaxed text-justify">
+                    <div className="space-y-4 font-serif leading-relaxed text-justify relative">
                       {currentPage.isChapterOpener && (
-                        <div className="text-center border-b pb-4 mb-6">
-                          <div className="font-sans text-xs font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-                            Chapitre {currentPage.chapterNumber}
+                        <div className="text-center pb-5 mb-6 border-b border-indigo-500/20">
+                          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-sans text-xs font-black uppercase tracking-widest mb-2">
+                            <span>✦</span>
+                            <span>Chapitre {currentPage.chapterNumber}</span>
+                            <span>✦</span>
                           </div>
-                          <h2 className="text-xl sm:text-2xl font-serif font-black mt-1">
+                          <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-tight mt-1 text-slate-900 dark:text-white">
                             {stripMarkdownToPureText(currentPage.chapterTitle)}
                           </h2>
+                          <div className="flex items-center justify-center gap-2 mt-2 text-indigo-500/40 text-xs">
+                            <span>—</span>
+                            <span>❦</span>
+                            <span>—</span>
+                          </div>
+
+                          {currentPage.illustrationUrl && (
+                            <div className="mt-4 mb-2 mx-auto max-w-[94%] group text-center">
+                              <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10 shadow-md bg-black/5">
+                                <img
+                                  src={currentPage.illustrationUrl}
+                                  alt={stripMarkdownToPureText(currentPage.chapterTitle)}
+                                  className="w-full max-h-[220px] object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              {currentPage.illustrationCaption && (
+                                <p className="mt-2 text-[11px] font-sans italic opacity-70 tracking-wide">
+                                  ✦ {currentPage.illustrationCaption}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
                       <div
-                        className="prose prose-slate dark:prose-invert max-w-none text-justify"
+                        className={`prose prose-slate dark:prose-invert max-w-none text-justify book-page-content ${currentPage.isChapterOpener ? 'first-page-dropcap' : ''}`}
                         dangerouslySetInnerHTML={{ __html: currentPage.contentHtml }}
                       />
                     </div>
 
-                    <div className="flex justify-between items-center border-t pt-3 font-sans text-xs opacity-50">
-                      <span>{bookStructure.author}</span>
-                      <span className="font-bold font-mono">- Page {currentPage.pageNumber} -</span>
+                    <div className="flex justify-between items-center border-t pt-3.5 font-sans text-xs opacity-60">
+                      <span className="font-medium italic">{bookStructure.author}</span>
+                      <span className="font-bold font-mono tracking-widest px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/5">
+                        • {currentPage.pageNumber} •
+                      </span>
                     </div>
                   </div>
                 )}
@@ -416,6 +447,22 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                     {stripMarkdownToPureText(currentChapter.title)}
                   </h2>
                 </div>
+
+                {currentChapter.illustrationUrl && (
+                  <div className="mb-8 overflow-hidden rounded-xl border border-black/10 dark:border-white/10 shadow-lg bg-black/5">
+                    <img
+                      src={currentChapter.illustrationUrl}
+                      alt={stripMarkdownToPureText(currentChapter.title)}
+                      className="w-full max-h-[300px] object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    {currentChapter.illustrationCaption && (
+                      <div className="p-3 bg-black/5 dark:bg-white/5 border-t border-inherit text-center text-xs font-sans italic opacity-75">
+                        ✦ {currentChapter.illustrationCaption}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div
                   className="space-y-4 font-serif leading-relaxed text-justify"

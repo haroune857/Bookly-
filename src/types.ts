@@ -8,6 +8,8 @@ export interface Chapter {
   content: string;
   wordCount: number;
   completed: boolean;
+  illustrationUrl?: string;
+  illustrationCaption?: string;
 }
 
 export interface Project {
@@ -25,6 +27,7 @@ export interface Project {
   status: ProjectStatus;
   progress: number;
   wordCount: number;
+  totalWords?: number;
   readingTimeMinutes: number;
   createdAt: string;
   updatedAt: string;
@@ -129,6 +132,8 @@ export interface TrainingCourse {
     completed: boolean;
     content?: string;
     keyTakeaways?: string[];
+    illustrationUrl?: string;
+    illustrationCaption?: string;
   }[];
 }
 

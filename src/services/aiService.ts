@@ -1,3 +1,9 @@
+import {
+  getEffectiveGeminiKey,
+  getEffectiveGroqKey
+} from '../constants/apiKeys';
+import { getThematicFallbackIllustration } from '../data/thematicIllustrations';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -23,8 +29,8 @@ function cleanAiOutput(text: string): string {
  * Used as an ultra-resilient fallback if the backend API is unreachable or on serverless cold-start
  */
 async function callClientDirectAi(prompt: string, systemPrompt?: string): Promise<{ text: string; source: 'gemini' | 'groq'; model: string } | null> {
-  const geminiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;
-  const groqKey = (import.meta as any).env?.VITE_GROQ_API_KEY || (import.meta as any).env?.GROQ_API_KEY;
+  const geminiKey = getEffectiveGeminiKey();
+  const groqKey = getEffectiveGroqKey();
 
   if (geminiKey) {
     try {
@@ -696,4 +702,98 @@ export async function callOpenRouterService(
     source: data.source
   };
 }
+
+export interface ChapterIllustrationResult {
+  imageUrl: string;
+  caption: string;
+  source: string;
+  promptUsed?: string;
+}
+
+/**
+ * Génère une illustration originale ou thématique haute définition pour un chapitre donné.
+ * Utilise l'API Gemini Image en priorité, avec basculement automatique vers la collection éditoriale haute définition.
+ */
+export async function generateChapterIllustration(params: {
+  bookTitle: string;
+  chapterTitle: string;
+  chapterNumber?: number;
+  category?: string;
+  chapterSummary?: string;
+  style?: 'editorial' | 'minimalist' | 'photorealistic' | 'cinematic' | 'watercolor';
+}): Promise<ChapterIllustrationResult> {
+  try {
+    const res = await fetch('/api/ai/chapter-illustration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.imageUrl) {
+        return {
+          imageUrl: data.imageUrl,
+          caption: data.caption || `Figure ${params.chapterNumber || 1} : Illustration — ${params.chapterTitle}`,
+          source: data.source || 'gemini',
+          promptUsed: data.promptUsed
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Backend illustration error, using client-side curated fallback:', err);
+  }
+
+  // Fallback direct côté client
+  const fallback = getThematicFallbackIllustration({
+    category: params.category,
+    chapterTitle: params.chapterTitle,
+    chapterNumber: params.chapterNumber
+  });
+
+  return {
+    imageUrl: fallback.imageUrl,
+    caption: `Figure ${params.chapterNumber || 1} : ${fallback.caption.replace(/^Figure \d+ : /, '')} — ${params.chapterTitle}`,
+    source: 'thematic_curated'
+  };
+}
+
+/**
+ * Génère séquentiellement les illustrations pour tous les chapitres d'un livre (génération en lot)
+ */
+export async function generateBatchIllustrations(
+  chapters: Array<{ id: string; title: string; content?: string }>,
+  bookInfo: {
+    bookTitle: string;
+    category?: string;
+    style?: 'editorial' | 'minimalist' | 'photorealistic' | 'cinematic' | 'watercolor';
+  },
+  onProgress?: (current: number, total: number, title: string) => void
+): Promise<Record<string, { illustrationUrl: string; illustrationCaption: string }>> {
+  const map: Record<string, { illustrationUrl: string; illustrationCaption: string }> = {};
+  const total = chapters.length;
+
+  for (let i = 0; i < total; i++) {
+    const ch = chapters[i];
+    if (onProgress) {
+      onProgress(i + 1, total, ch.title);
+    }
+    const result = await generateChapterIllustration({
+      bookTitle: bookInfo.bookTitle,
+      chapterTitle: ch.title,
+      chapterNumber: i + 1,
+      category: bookInfo.category,
+      chapterSummary: ch.content ? ch.content.slice(0, 300) : undefined,
+      style: bookInfo.style
+    });
+
+    map[ch.id] = {
+      illustrationUrl: result.imageUrl,
+      illustrationCaption: result.caption
+    };
+  }
+
+  return map;
+}
+
 

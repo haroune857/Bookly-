@@ -28,6 +28,8 @@ export interface FormattedPage {
   isCover?: boolean;
   isToc?: boolean;
   isChapterOpener?: boolean;
+  illustrationUrl?: string;
+  illustrationCaption?: string;
   contentHtml: string;
   wordCount: number;
 }
@@ -204,7 +206,8 @@ export function paginateBook(
     paragraphs.forEach((p) => {
       const words = p.trim().split(/\s+/).filter(Boolean).length;
       // Sur une page A4 avec police 11pt, interligne 1.6 et marges 20mm, ~320-360 mots par page
-      const maxWordsThisPage = isFirstPageOfChapter ? 280 : 350;
+      // Si une illustration d'ouverture est présente, nous réduisons le quota à 180 mots pour un rendu aéré
+      const maxWordsThisPage = isFirstPageOfChapter ? (ch.illustrationUrl ? 180 : 280) : 350;
 
       if (currentWordCount + words > maxWordsThisPage && currentPageParagraphs.length > 0) {
         const rawPageText = currentPageParagraphs.join('\n\n');
@@ -213,6 +216,8 @@ export function paginateBook(
           chapterTitle: ch.title,
           chapterNumber: chIdx + 1,
           isChapterOpener: isFirstPageOfChapter,
+          illustrationUrl: isFirstPageOfChapter ? ch.illustrationUrl : undefined,
+          illustrationCaption: isFirstPageOfChapter ? (ch.illustrationCaption || `Figure ${chIdx + 1} : Illustration — ${stripMarkdownToPureText(ch.title)}`) : undefined,
           contentHtml: cleanAndFormatTextToHtml(rawPageText),
           wordCount: currentWordCount
         });
@@ -232,6 +237,8 @@ export function paginateBook(
         chapterTitle: ch.title,
         chapterNumber: chIdx + 1,
         isChapterOpener: isFirstPageOfChapter,
+        illustrationUrl: isFirstPageOfChapter ? ch.illustrationUrl : undefined,
+        illustrationCaption: isFirstPageOfChapter ? (ch.illustrationCaption || `Figure ${chIdx + 1} : Illustration — ${stripMarkdownToPureText(ch.title)}`) : undefined,
         contentHtml: cleanAndFormatTextToHtml(rawPageText),
         wordCount: currentWordCount
       });
@@ -927,6 +934,12 @@ export function generatePrintableBookHtml(item: Project | LibraryBook): string {
           <div class="chapter-opener">
             <span class="chapter-eyebrow">Chapitre ${page.chapterNumber || ''}</span>
             <h2 class="chapter-main-title">${stripMarkdownToPureText(page.chapterTitle)}</h2>
+            ${page.illustrationUrl ? `
+              <div class="chapter-illustration" style="margin: 18px auto 22px auto; text-align: center; max-width: 90%;">
+                <img src="${page.illustrationUrl}" alt="${stripMarkdownToPureText(page.chapterTitle)}" style="width: 100%; max-height: 250px; object-fit: cover; border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,0.12); border: 1px solid #e2e8f0;" referrerpolicy="no-referrer" />
+                ${page.illustrationCaption ? `<div style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 6px;">✦ ${page.illustrationCaption}</div>` : ''}
+              </div>
+            ` : ''}
           </div>
         ` : ''}
         ${page.contentHtml}

@@ -146,3 +146,63 @@ export function incrementAiCount(user: UserProfile): UserProfile {
 
   return updated;
 }
+
+/**
+ * Vérifie si l'utilisateur est éligible à la fonctionnalité exclusive :
+ * "Génération d'Images d'Illustration Intérieures pour les Chapitres"
+ * Règle stricte exigée :
+ * "Pour les abonnements ayant la plus grande valeur, les abonnements à 15000 francs et pour une souscription minimum de 3 mois."
+ * - Plan Premium (15 000 FCFA/mois)
+ * - Souscription d'au moins 3 mois : billingCycle 'quarterly' (3 mois) ou 'yearly' (1 an)
+ * - Les comptes administrateurs ont également un accès de test complet.
+ */
+export function checkCanGenerateChapterIllustrations(user?: Partial<UserProfile> | null): {
+  allowed: boolean;
+  reason?: string;
+  isPremium: boolean;
+  hasMinDuration: boolean;
+  currentCycle?: string;
+} {
+  if (user?.isAdmin) {
+    return {
+      allowed: true,
+      isPremium: true,
+      hasMinDuration: true,
+      currentCycle: user?.planBilling || 'quarterly'
+    };
+  }
+
+  const plan = getUserPlan(user);
+  const isPremium = plan === 'premium';
+  const billingCycle = user?.planBilling || 'monthly';
+  const hasMinDuration = billingCycle === 'quarterly' || billingCycle === 'yearly';
+
+  if (!isPremium) {
+    return {
+      allowed: false,
+      isPremium: false,
+      hasMinDuration: false,
+      currentCycle: billingCycle,
+      reason:
+        "La génération d'illustrations intérieures de chapitres par l'IA est une exclusivité Prestige réservée aux abonnements Premium (15 000 FCFA/mois) avec une souscription minimale de 3 mois."
+    };
+  }
+
+  if (!hasMinDuration) {
+    return {
+      allowed: false,
+      isPremium: true,
+      hasMinDuration: false,
+      currentCycle: billingCycle,
+      reason:
+        "Votre compte est actuellement souscrit au Plan Premium Mensuel (1 mois). La génération automatique des illustrations de chapitres requiert une souscription d'au moins 3 mois (Trimestriel ou Annuel)."
+    };
+  }
+
+  return {
+    allowed: true,
+    isPremium: true,
+    hasMinDuration: true,
+    currentCycle: billingCycle
+  };
+}

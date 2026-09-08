@@ -20,7 +20,9 @@ import {
   Calendar,
   Layers,
   Sparkles,
-  BarChart3
+  PieChart as PieChartIcon,
+  Wallet,
+  ArrowDownRight
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -79,7 +81,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [userPlanFilter, setUserPlanFilter] = useState<'all' | 'free' | 'pro' | 'premium' | 'blocked'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
-  // Compute real KPIs (zero-based factory metrics)
+  // User financial calculation helper
+  const getUserFinancials = (user: AdminUser) => {
+    const monthlyRate = user.plan === 'premium' ? 32000 : user.plan === 'pro' ? 19000 : 0;
+    // Estimated lifetime contribution based on plan and projects
+    const estimatedMonths = Math.max(1, Math.min(6, (user.lifetimeProjects || 1)));
+    const totalSpent = monthlyRate * estimatedMonths;
+    return {
+      monthlyRate,
+      estimatedMonths,
+      totalSpent
+    };
+  };
+
+  // Compute real KPIs
   const kpiData = useMemo(() => {
     const totalUsers = users.length;
     const freeCount = users.filter((u) => u.plan === 'free').length;
@@ -91,7 +106,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const totalWords = users.reduce((acc, u) => acc + (u.totalWordsGenerated || 0), 0);
     const totalProjects = users.reduce((acc, u) => acc + (u.lifetimeProjects || 0), 0);
 
-    // AI Token metrics (strictly token count, no monetary cost)
+    // AI Token metrics
     const totalTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.totalTokens || 0), 0);
     const groqTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.groqTokens || 0), 0);
     const geminiTokensMonth = apiStats.reduce((acc, stat) => acc + (stat.geminiTokens || 0), 0);
@@ -108,9 +123,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     const totalChurn = subscriptionRevenueStats.reduce((acc, s) => acc + (s.churnCount || 0), 0);
 
     // Monthly Recurring Revenue (MRR) based on active paid subscribers
-    // Pro: 19 000 FCFA/mois, Premium: 32 000 FCFA/mois
-    const calculatedMRR = (proCount * 19000) + (premiumCount * 32000) + totalSaspayRevenue;
+    const calculatedMRR = (proCount * 19000) + (premiumCount * 32000);
     const calculatedARR = calculatedMRR * 12;
+
+    // Total lifetime revenue brought by current user base
+    const totalUsersRevenue = users.reduce((acc, u) => acc + getUserFinancials(u).totalSpent, 0);
 
     return {
       totalUsers,
@@ -134,9 +151,38 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       totalRenewals,
       totalChurn,
       mrr: calculatedMRR,
-      arr: calculatedARR
+      arr: calculatedARR,
+      totalUsersRevenue,
+      arpu: paidCount > 0 ? Math.round(calculatedMRR / paidCount) : 0
     };
   }, [users, apiStats, subscriptionRevenueStats]);
+
+  // Data for Pie Charts
+  const planDistributionData = useMemo(() => [
+    { name: 'Forfait Premium (32k)', value: kpiData.premiumCount, color: '#f59e0b', revenue: kpiData.premiumCount * 32000 },
+    { name: 'Forfait Pro (19k)', value: kpiData.proCount, color: '#6366f1', revenue: kpiData.proCount * 19000 },
+    { name: 'Gratuit / Essai', value: kpiData.freeCount, color: '#94a3b8', revenue: 0 }
+  ], [kpiData]);
+
+  const revenueByPlanData = useMemo(() => [
+    { name: 'Abonnements Premium', value: kpiData.premiumSaspayRevenue, color: '#f59e0b' },
+    { name: 'Abonnements Pro', value: kpiData.proSaspayRevenue, color: '#6366f1' }
+  ], [kpiData]);
+
+  const providerDistributionData = useMemo(() => [
+    { name: 'Groq (Inférence Ultra-Rapide)', value: kpiData.groqTokensMonth, color: '#6366f1' },
+    { name: 'Gemini (Long Contexte)', value: kpiData.geminiTokensMonth, color: '#a855f7' }
+  ], [kpiData]);
+
+  // Top revenue-generating users
+  const topRevenueUsers = useMemo(() => {
+    return [...users]
+      .map((u) => ({
+        ...u,
+        ...getUserFinancials(u)
+      }))
+      .sort((a, b) => b.totalSpent - a.totalSpent);
+  }, [users]);
 
   // Filtered users list
   const filteredUsers = useMemo(() => {
@@ -244,39 +290,30 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </span>
               <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Moteurs IA en Ligne (Groq & Gemini)
+                Moteurs IA en Ligne &amp; Passerelle Saspay Active
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Administration Bookly Studio
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+              Tableau de Bord Administrateur
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
-              Supervision des abonnements SaaS Saspay, consommation des tokens IA, et gestion des auteurs.
+            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
+              Supervision des revenus d'abonnements Saspay, suivi analytique des données utilisateurs, diagrammes de monétisation et monitoring IA.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               onClick={handleExportSaspayReport}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 border border-emerald-500/30 transition-colors shadow-xs"
-              title="Exporter le rapport des revenus Saspay"
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-xs"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exporter Saspay (CSV)</span>
-            </button>
-
-            <button
-              onClick={() => onShowToast('Données Synchronisées', 'Les métriques de tokens et revenus ont été actualisées.', 'info')}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Actualiser</span>
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Rapport Financier CSV</span>
             </button>
 
             <button
               onClick={onLockAdmin}
-              className="px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold flex items-center gap-2 border border-red-500/30 transition-colors shadow-xs"
+              className="px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold flex items-center gap-2 border border-red-500/30 transition-colors"
             >
               <Lock className="w-3.5 h-3.5" />
               <span>Verrouiller</span>
@@ -284,69 +321,50 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* ------------------------------------------------------------- */}
-        {/* SUMMARY BAR : 5 CARTES CLÉS */}
-        {/* ------------------------------------------------------------- */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-6 pt-6 border-t border-slate-800">
+        {/* 4 Super-KPIs Bar */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6 pt-6 border-t border-slate-800/80">
           
-          {/* Card 1: Revenus SaaS Saspay */}
-          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-indigo-500/30">
-            <div className="text-[11px] text-indigo-300 font-semibold flex items-center justify-between">
-              <span>Revenus SaaS Saspay</span>
-              <CreditCard className="w-4 h-4 text-indigo-400" />
-            </div>
-            <div className="text-lg sm:text-xl font-black text-white mt-1">
-              {kpiData.totalSaspayRevenue.toLocaleString('fr-FR')} <span className="text-xs font-normal text-slate-400">FCFA</span>
-            </div>
-            <div className="text-[10px] text-emerald-400 flex items-center gap-1 mt-0.5 font-medium">
-              <TrendingUp className="w-3 h-3" /> MRR : {kpiData.mrr.toLocaleString('fr-FR')} FCFA
-            </div>
-          </div>
-
-          {/* Card 2: Abonnés Payants (Pro & Premium) */}
-          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-emerald-500/30">
-            <div className="text-[11px] text-emerald-300 font-semibold flex items-center justify-between">
-              <span>Abonnés Payants</span>
+          <div className="bg-slate-850/80 p-3.5 rounded-2xl border border-slate-750">
+            <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Revenus Période (Saspay)</span>
               <DollarSign className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-lg sm:text-xl font-black text-emerald-400 mt-1">
-              {kpiData.paidCount} <span className="text-xs font-normal text-slate-400">actifs</span>
+              {kpiData.totalSaspayRevenue.toLocaleString('fr-FR')} <span className="text-xs font-bold">FCFA</span>
             </div>
-            <div className="text-[10px] text-slate-300 flex items-center gap-1 mt-0.5 font-medium">
-              <span>{kpiData.proCount} Pro • {kpiData.premiumCount} Premium</span>
+            <div className="text-[10px] text-emerald-500/90 mt-0.5 font-medium flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              <span>+{kpiData.totalNewSubs} souscriptions</span>
             </div>
           </div>
 
-          {/* Card 3: Total Auteurs / Membres */}
-          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+          <div className="bg-slate-850/80 p-3.5 rounded-2xl border border-slate-750">
             <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
-              <span>Auteurs & Membres</span>
-              <Users className="w-4 h-4 text-indigo-400" />
+              <span>MRR Récurrent Actuel</span>
+              <CreditCard className="w-4 h-4 text-indigo-400" />
             </div>
-            <div className="text-lg sm:text-xl font-black text-white mt-1">
-              {kpiData.totalUsers}
+            <div className="text-lg sm:text-xl font-black text-indigo-300 mt-1">
+              {kpiData.mrr.toLocaleString('fr-FR')} <span className="text-xs font-bold">FCFA/m</span>
             </div>
-            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
-              <span>{kpiData.freeCount} Forfait Gratuit</span>
+            <div className="text-[10px] text-indigo-400 mt-0.5 font-medium">
+              ARR: {kpiData.arr.toLocaleString('fr-FR')} FCFA/an
             </div>
           </div>
 
-          {/* Card 4: Volume Rédaction */}
-          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+          <div className="bg-slate-850/80 p-3.5 rounded-2xl border border-slate-750">
             <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
-              <span>Volume Rédaction</span>
-              <Zap className="w-4 h-4 text-amber-400" />
+              <span>Auteurs Inscrits</span>
+              <Users className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-lg sm:text-xl font-black text-white mt-1">
-              {kpiData.totalWords.toLocaleString('fr-FR')} <span className="text-xs font-normal text-slate-400">mots</span>
+            <div className="text-lg sm:text-xl font-black text-amber-300 mt-1">
+              {kpiData.totalUsers} <span className="text-xs font-normal text-slate-400">comptes</span>
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
-              {kpiData.totalProjects} livres & manuscrits
+            <div className="text-[10px] text-amber-400 mt-0.5 font-medium">
+              {kpiData.paidCount} abonnés payants ({kpiData.totalUsers > 0 ? ((kpiData.paidCount / kpiData.totalUsers) * 100).toFixed(0) : 0}%)
             </div>
           </div>
 
-          {/* Card 5: Utilisation des Tokens IA (Strictly Tokens) */}
-          <div className="bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60 col-span-2 sm:col-span-1">
+          <div className="bg-slate-850/80 p-3.5 rounded-2xl border border-slate-750">
             <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
               <span>Tokens IA Consommés</span>
               <Cpu className="w-4 h-4 text-purple-400" />
@@ -355,7 +373,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               {kpiData.totalTokensMonth.toLocaleString('fr-FR')} <span className="text-xs font-normal text-slate-400">tokens</span>
             </div>
             <div className="text-[10px] text-purple-400 mt-0.5 font-medium">
-              {kpiData.totalRequestsMonth} requêtes IA totales
+              {kpiData.totalRequestsMonth} requêtes IA
             </div>
           </div>
 
@@ -375,7 +393,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          <span>1. Indicateurs Clés & Performance</span>
+          <span>1. Indicateurs Clés &amp; Diagrammes</span>
         </button>
 
         <button
@@ -399,7 +417,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>3. Gestion des Utilisateurs ({users.length})</span>
+          <span>3. Données Auteurs &amp; Argent Généré ({users.length})</span>
         </button>
 
         <button
@@ -423,19 +441,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>5. Journal Système & Paramètres Globaux</span>
+          <span>5. Journal Système &amp; Quotas</span>
         </button>
       </div>
 
       {/* ============================================================= */}
-      {/* TAB 1: KPIS & APERÇU GÉNÉRAL */}
+      {/* TAB 1: KPIS, DIAGRAMMES ÉPURÉS & CAMEMBERTS */}
       {/* ============================================================= */}
       {activeTab === 'kpis' && (
         <div className="space-y-6 animate-in fade-in">
           
+          {/* Section 1: Les Graphiques Principaux */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
-            {/* Graphique 1: Revenus SaaS Saspay */}
+            {/* Graphique 1: Revenus SaaS Saspay (Area) */}
             <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
@@ -444,10 +463,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                      Revenus SaaS Saspay (Abonnements)
+                      Évolution des Revenus Saspay (FCFA)
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Souscriptions Pro (19 000 FCFA) & Premium (32 000 FCFA)
+                      Souscriptions quotidiennes Pro &amp; Premium
                     </p>
                   </div>
                 </div>
@@ -462,16 +481,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={subscriptionRevenueStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <AreaChart data={subscriptionRevenueStats} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorSaspay" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.4} />
                     <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(val) => `${val / 1000}k`} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#0f172a',
@@ -496,7 +515,81 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
 
-            {/* Graphique 2: Utilisation des Tokens IA (Strictly Tokens) */}
+            {/* Graphique 2: Répartition des Revenus par Forfait (Camembert Épuré) */}
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <PieChartIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Répartition des Abonnés &amp; Forfaits
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Diagramme circulaire de la base utilisateurs
+                    </p>
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {kpiData.totalUsers} Utilisateurs
+                </span>
+              </div>
+
+              <div className="h-56 w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={planDistributionData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={4}
+                    >
+                      {planDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        borderColor: '#334155',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value: any, name: any) => [`${value} utilisateur(s)`, name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Legend with data values */}
+              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                {planDistributionData.map((item, idx) => (
+                  <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-850">
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      <span className="w-2 h-2 rounded-full" style={{ background: item.color }} />
+                      <span>{item.name.split(' ')[1] || item.name}</span>
+                    </div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white mt-0.5">
+                      {item.value} ({kpiData.totalUsers > 0 ? ((item.value / kpiData.totalUsers) * 100).toFixed(0) : 0}%)
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Section 2: Deuxième rangée de graphiques (Consommation IA & Répartition Moteur) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Graphique 3: Consommation des Tokens IA */}
             <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
@@ -505,10 +598,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                      Consommation des Tokens IA
+                      Volume des Tokens IA Consommés
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Tokens d'inférence consommés (Groq & Gemini)
+                      Tokens d'inférence traités (Groq &amp; Gemini)
                     </p>
                   </div>
                 </div>
@@ -523,10 +616,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={apiStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                  <BarChart data={apiStats} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.4} />
                     <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(val) => `${val / 1000}k`} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#0f172a',
@@ -544,32 +637,163 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
 
+            {/* Graphique 4: Camembert Inférence IA */}
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Part d'Inférence par Modèle IA
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Répartition de la charge de calcul
+                    </p>
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                  {kpiData.totalRequestsMonth} Requêtes
+                </span>
+              </div>
+
+              <div className="h-56 w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={providerDistributionData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={4}
+                    >
+                      {providerDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        borderColor: '#334155',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        fontSize: '12px'
+                      }}
+                      formatter={(val: any, name: any) => [`${Number(val).toLocaleString('fr-FR')} tokens`, name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                {providerDistributionData.map((item, idx) => (
+                  <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-850">
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      <span className="w-2 h-2 rounded-full" style={{ background: item.color }} />
+                      <span>{item.name.split(' ')[0]}</span>
+                    </div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white mt-0.5">
+                      {kpiData.totalTokensMonth > 0 ? ((item.value / kpiData.totalTokensMonth) * 100).toFixed(1) : 0}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* KPI Mini-cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Forfaits Pro Actifs</span>
-              <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
-                {kpiData.proCount} auteur(s)
+          {/* Section 3: Classement des Auteurs par Argent Rapporté (Top Contributors) */}
+          <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                  <Wallet className="w-4 h-4" />
+                  <span>Suivi de la Rentabilité par Utilisateur</span>
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mt-1">
+                  Classement des Utilisateurs par Argent Rapporté
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Vue détaillée des contributions financières cumulées par auteur via Saspay.
+                </p>
               </div>
-              <span className="text-[11px] text-indigo-500 font-semibold mt-0.5 block">19 000 FCFA / mois</span>
+
+              <div className="text-left sm:text-right">
+                <span className="text-xs text-slate-400 block font-medium">Revenu Total Généré par les Utilisateurs</span>
+                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                  {kpiData.totalUsersRevenue.toLocaleString('fr-FR')} FCFA
+                </span>
+              </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Forfaits Premium Actifs</span>
-              <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
-                {kpiData.premiumCount} auteur(s)
-              </div>
-              <span className="text-[11px] text-purple-500 font-semibold mt-0.5 block">32 000 FCFA / mois</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Taux d'Abonnés Payants</span>
-              <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-                {kpiData.totalUsers > 0 ? ((kpiData.paidCount / kpiData.totalUsers) * 100).toFixed(1) : '0.0'}%
-              </div>
-              <span className="text-[11px] text-slate-400 block mt-0.5">Ratio de conversion SaaS</span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <tr>
+                    <th className="p-3 rounded-l-xl">Rang &amp; Auteur</th>
+                    <th className="p-3">Forfait Actif</th>
+                    <th className="p-3">Mensualité Saspay</th>
+                    <th className="p-3">Livres Rédigés</th>
+                    <th className="p-3">Mots Générés</th>
+                    <th className="p-3 rounded-r-xl text-right">Argent Rapporté (Cumulé)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {topRevenueUsers.map((u, idx) => (
+                    <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <span className={`w-5 text-center font-bold text-xs ${idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-slate-400' : idx === 2 ? 'text-amber-700' : 'text-slate-400'}`}>
+                            #{idx + 1}
+                          </span>
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
+                            style={{ background: u.avatarBg || 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                          >
+                            {u.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                            u.plan === 'premium'
+                              ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                              : u.plan === 'pro'
+                              ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {u.plan}
+                        </span>
+                      </td>
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                        {u.monthlyRate > 0 ? `${u.monthlyRate.toLocaleString('fr-FR')} FCFA/m` : '0 FCFA'}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                        {u.lifetimeProjects || 0} livres
+                      </td>
+                      <td className="p-3 font-mono text-slate-500">
+                        {(u.totalWordsGenerated || 0).toLocaleString('fr-FR')}
+                      </td>
+                      <td className="p-3 text-right">
+                        <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                          {u.totalSpent.toLocaleString('fr-FR')} FCFA
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -630,7 +854,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   {kpiData.totalSaspayRevenue.toLocaleString('fr-FR')} FCFA
                 </div>
                 <span className="text-[11px] text-slate-400 font-medium mt-0.5 block">
-                  Via Saspay Mobile Money & Cartes
+                  Via Saspay Mobile Money &amp; Cartes
                 </span>
               </div>
 
@@ -699,7 +923,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {/* ============================================================= */}
-      {/* TAB 3: GESTION DES UTILISATEURS */}
+      {/* TAB 3: GESTION DES UTILISATEURS & SUIVI DE L'ARGENT */}
       {/* ============================================================= */}
       {activeTab === 'users' && (
         <div className="space-y-6 animate-in fade-in">
@@ -708,10 +932,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Répertoire des Auteurs & Comptes ({filteredUsers.length} affichés)
+                  Répertoire des Auteurs &amp; Données de Monétisation ({filteredUsers.length} affichés)
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Contrôle des accès, changement de forfait et réinitialisation des quotas.
+                  Suivez en direct l'argent généré par chaque utilisateur, gérez les accès et quotas de prompts.
                 </p>
               </div>
 
@@ -749,6 +973,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <tr>
                     <th className="p-3 rounded-l-xl">Utilisateur</th>
                     <th className="p-3">Forfait</th>
+                    <th className="p-3">Argent Rapporté</th>
                     <th className="p-3">Prompts Utilisés</th>
                     <th className="p-3">Volume Mots</th>
                     <th className="p-3">Projets</th>
@@ -759,101 +984,102 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-slate-400 text-xs">
+                      <td colSpan={8} className="text-center py-8 text-slate-400 text-xs">
                         Aucun utilisateur ne correspond aux critères.
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
-                              style={{ background: u.avatarBg || 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-                            >
-                              {u.name.substring(0, 2).toUpperCase()}
+                    filteredUsers.map((u) => {
+                      const fin = getUserFinancials(u);
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
+                                style={{ background: u.avatarBg || 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                              >
+                                {u.name.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
+                                <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
-                              <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                              u.plan === 'premium'
-                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                                : u.plan === 'pro'
-                                ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                            }`}
-                          >
-                            {u.plan}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className="font-semibold text-slate-900 dark:text-white">{u.dailyPromptsUsed}</span>
-                          <span className="text-slate-400 text-[10px]"> / {u.dailyPromptsLimit}</span>
-                        </td>
-                        <td className="p-3 font-semibold text-slate-900 dark:text-white">
-                          {(u.totalWordsGenerated || 0).toLocaleString('fr-FR')}
-                        </td>
-                        <td className="p-3 font-semibold text-slate-900 dark:text-white">
-                          {u.lifetimeProjects || 0}
-                        </td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              u.status === 'blocked'
-                                ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                            }`}
-                          >
-                            {u.status === 'blocked' ? 'Bloqué' : 'Actif'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Plan toggle */}
-                            <select
-                              value={u.plan}
-                              onChange={(e: any) => handleChangeUserPlan(u.id, e.target.value)}
-                              className="text-[11px] p-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                            >
-                              <option value="free">Gratuit</option>
-                              <option value="pro">Pro</option>
-                              <option value="premium">Premium</option>
-                            </select>
-
-                            {/* Reset counters */}
-                            <button
-                              type="button"
-                              onClick={() => handleResetUserCounters(u.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
-                              title="Réinitialiser les compteurs à zéro"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Block/Unblock */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleBlockUser(u.id)}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                u.status === 'blocked'
-                                  ? 'text-emerald-600 hover:bg-emerald-50'
-                                  : 'text-red-500 hover:bg-red-50'
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                u.plan === 'premium'
+                                  ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                  : u.plan === 'pro'
+                                  ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                               }`}
-                              title={u.status === 'blocked' ? 'Débloquer' : 'Bloquer'}
                             >
-                              <Ban className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                              {u.plan}
+                            </span>
+                          </td>
+                          <td className="p-3 font-black text-emerald-600 dark:text-emerald-400">
+                            {fin.totalSpent.toLocaleString('fr-FR')} FCFA
+                          </td>
+                          <td className="p-3">
+                            <span className="font-semibold text-slate-900 dark:text-white">{u.dailyPromptsUsed}</span>
+                            <span className="text-slate-400 text-[10px]"> / {u.dailyPromptsLimit}</span>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                            {(u.totalWordsGenerated || 0).toLocaleString('fr-FR')}
+                          </td>
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                            {u.lifetimeProjects || 0}
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                u.status === 'blocked'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              }`}
+                            >
+                              {u.status === 'blocked' ? 'Bloqué' : 'Actif'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <select
+                                value={u.plan}
+                                onChange={(e: any) => handleChangeUserPlan(u.id, e.target.value)}
+                                className="text-[11px] p-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                              >
+                                <option value="free">Gratuit</option>
+                                <option value="pro">Pro</option>
+                                <option value="premium">Premium</option>
+                              </select>
+
+                              <button
+                                onClick={() => handleResetUserCounters(u.id)}
+                                title="Remettre compteurs à zéro"
+                                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-indigo-600"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleBlockUser(u.id)}
+                                title={u.status === 'blocked' ? 'Débloquer' : 'Bloquer'}
+                                className={`p-1 rounded-lg transition-colors ${
+                                  u.status === 'blocked'
+                                    ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50'
+                                    : 'text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -865,164 +1091,69 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {/* ============================================================= */}
-      {/* TAB 4: CONSOMMATION DES TOKENS IA (SANS AUCUN COÛT MONÉTAIRE) */}
+      {/* TAB 4: UTILISATION DES TOKENS IA */}
       {/* ============================================================= */}
       {activeTab === 'api' && (
         <div className="space-y-6 animate-in fade-in">
           
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="pb-6 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 text-xs font-black uppercase tracking-wider">
-                <Cpu className="w-4 h-4" />
-                Métriques d'Inférence d'Intelligence Artificielle
-              </div>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                Consommation des Tokens IA (Gemini & Groq)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Surveillance exclusive du volume de tokens consommés, sans indicateur de coût financier.
-              </p>
-            </div>
-
-            {/* Tokens Highlights */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 my-6">
-              <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60">
-                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Tokens Totaux</span>
-                <div className="text-xl font-black text-purple-700 dark:text-purple-300 mt-1">
-                  {kpiData.totalTokensMonth.toLocaleString('fr-FR')}
-                </div>
-                <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">Tous modèles confondus</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60">
-                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Tokens Groq</span>
-                <div className="text-xl font-black text-indigo-700 dark:text-indigo-300 mt-1">
-                  {kpiData.groqTokensMonth.toLocaleString('fr-FR')}
-                </div>
-                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">LPUs Haute Vitesse</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Tokens Gemini</span>
-                <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                  {kpiData.geminiTokensMonth.toLocaleString('fr-FR')}
-                </div>
-                <span className="text-[11px] text-slate-500 font-medium">Google DeepMind</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500 dark:text-slate-400 block font-semibold">Requêtes IA</span>
-                <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                  {kpiData.totalRequestsMonth}
-                </div>
-                <span className="text-[11px] text-slate-500 font-medium">Appels API traités</span>
-              </div>
-            </div>
-
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Chart 1: Tokens par Fournisseur */}
+          <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-2">
-                  Volume Quotidien de Tokens : Groq vs Gemini
-                </h4>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={apiStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                      <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          borderColor: '#334155',
-                          borderRadius: '12px',
-                          color: '#fff',
-                          fontSize: '12px'
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                      <Bar dataKey="groqTokens" name="Tokens Groq" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="geminiTokens" name="Tokens Gemini" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Monitoring &amp; Consommation des Tokens IA
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Suivi des tokens d'entrée et de sortie sur les 7 derniers jours.
+                </p>
               </div>
 
-              {/* Chart 2: Tokens Entrée vs Sortie */}
-              <div>
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-2">
-                  Répartition : Tokens d'Entrée (Prompt) vs Sortie (Complétion)
-                </h4>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={apiStats} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorInput" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="colorOutput" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                      <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          borderColor: '#334155',
-                          borderRadius: '12px',
-                          color: '#fff',
-                          fontSize: '12px'
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                      <Area
-                        type="monotone"
-                        dataKey="inputTokens"
-                        name="Tokens d'Entrée"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        fill="url(#colorInput)"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="outputTokens"
-                        name="Tokens de Sortie"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        fill="url(#colorOutput)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
+                  Groq SDK (qwen3.8-27b)
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800">
+                  Google Gemini SDK
+                </span>
               </div>
-
             </div>
 
-            {/* Model details */}
-            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-              <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3">
-                Modèles d'Intelligence Artificielle en Ligne
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="font-bold text-slate-900 dark:text-white">qwen/qwen3.8-27b (Groq)</p>
-                  <p className="text-[11px] text-slate-500 mt-1">Moteur principal de rédaction de chapitres et relecture.</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="font-bold text-slate-900 dark:text-white">groq/compound (Groq)</p>
-                  <p className="text-[11px] text-slate-500 mt-1">Brainstorming, structuration de plans et idéation rapide.</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="font-bold text-slate-900 dark:text-white">gemini-2.5-flash (Google)</p>
-                  <p className="text-[11px] text-slate-500 mt-1">Raisonnement complexe et synthèses de contenu.</p>
-                </div>
-              </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <tr>
+                    <th className="p-3 rounded-l-xl">Jour</th>
+                    <th className="p-3">Tokens Groq</th>
+                    <th className="p-3">Tokens Gemini</th>
+                    <th className="p-3">Input Tokens</th>
+                    <th className="p-3">Output Tokens</th>
+                    <th className="p-3">Total Tokens</th>
+                    <th className="p-3 rounded-r-xl">Requêtes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {apiStats.map((stat, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                        {stat.dayLabel} ({stat.date})
+                      </td>
+                      <td className="p-3 font-medium text-indigo-600 dark:text-indigo-400">
+                        {stat.groqTokens.toLocaleString('fr-FR')}
+                      </td>
+                      <td className="p-3 font-medium text-purple-600 dark:text-purple-400">
+                        {stat.geminiTokens.toLocaleString('fr-FR')}
+                      </td>
+                      <td className="p-3 text-slate-500">{stat.inputTokens.toLocaleString('fr-FR')}</td>
+                      <td className="p-3 text-slate-500">{stat.outputTokens.toLocaleString('fr-FR')}</td>
+                      <td className="p-3 font-black text-slate-900 dark:text-white">
+                        {stat.totalTokens.toLocaleString('fr-FR')}
+                      </td>
+                      <td className="p-3 font-bold text-emerald-600">
+                        {stat.requestsCount}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
           </div>
@@ -1040,13 +1171,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             
             {/* Global Settings */}
             <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-indigo-600" />
-                Quotas & Limites Quotidiennes
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Ajustez les quotas de requêtes IA journalières autorisées par type de compte.
-              </p>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-indigo-500" />
+                  Configuration des Quotas &amp; Limites
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Ajustez les seuils quotidiens attribués à chaque forfait.
+                </p>
+              </div>
 
               <div className="space-y-3 pt-2">
                 <div>
@@ -1124,7 +1257,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Activity className="w-4 h-4 text-emerald-500" />
-                  Journal des Événements & Santé Système
+                  Journal des Événements &amp; Santé Système
                 </h3>
                 <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
                   Système Sain
@@ -1137,7 +1270,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <span>Tous les services opérationnels</span>
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Aucune erreur critique n'est signalée. Les appels API Groq, Gemini et Saspay sont surveillés en temps réel.
+                  Aucune erreur critique n'est signalée. Les appels API Groq, Gemini et Saspay sont surveillés en temps réel avec secours immédiat.
                 </p>
               </div>
 

@@ -26,6 +26,7 @@ interface SubscriptionModalProps {
   onUpgradeSuccess: (updatedUser: UserProfile) => void;
   onShowToast: (title: string, message: string, type?: 'success' | 'error' | 'info') => void;
   initialPlan?: 'pro' | 'premium';
+  initialCycle?: 'monthly' | 'quarterly' | 'yearly';
 }
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
@@ -34,10 +35,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   user,
   onUpgradeSuccess,
   onShowToast,
-  initialPlan = 'pro'
+  initialPlan = 'pro',
+  initialCycle = 'monthly'
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'premium'>(initialPlan);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>(initialCycle);
   const [step, setStep] = useState<'select' | 'saspay_modal' | 'success'>('select');
 
   // Saspay Session & Interactive Modal State
@@ -51,12 +53,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   const pollIntervalRef = useRef<any>(null);
 
-  // Sync initial plan if it changes
+  // Sync initial plan and cycle if they change
   useEffect(() => {
     if (initialPlan) {
       setSelectedPlan(initialPlan);
     }
   }, [initialPlan]);
+
+  useEffect(() => {
+    if (initialCycle) {
+      setBillingCycle(initialCycle);
+    }
+  }, [initialCycle]);
 
   // Pricing calculation
   const getPrice = (plan: 'pro' | 'premium') => {
@@ -519,6 +527,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   </div>
 
                   <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <li className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-semibold bg-purple-500/10 px-2 py-1 rounded-lg border border-purple-500/20">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                      <span>Illustrations IA HD intérieures au début de chaque chapitre (Dès 3 mois)</span>
+                    </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-purple-500 shrink-0" />
                       <span className="font-semibold text-slate-900 dark:text-white">Tout ce qui est dans Pro</span>

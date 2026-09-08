@@ -29,6 +29,8 @@ export const INITIAL_TRAINING_COURSES: TrainingCourse[] = [
         title: 'Chapitre 1 : Trouver un sujet percutant et tester la demande en 48h',
         duration: '25 pages',
         completed: true,
+        illustrationUrl: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80',
+        illustrationCaption: 'Figure 1.1 : L\'étincelle créative et la genèse d\'une idée éditoriale forte.',
         content: `## 1.1 L'Alignement Passion & Problème Marché\n\nUn livre ou e-book remarquable ne commence jamais par une envie d'écrire 300 pages : il naît d'un point de douleur aigu vécu par un groupe de personnes.\n\n### Les 3 Questions Fondamentales à vous poser :\n1. **Quel est le coût de ne pas résoudre ce problème ?**\n2. **Quelle transformation concrète mon lecteur obtient-il en refermant ce livre ?**\n3. **Pourquoi suis-je la personne légitime pour transmettre cette méthode ?**\n\n### Méthodologie d'Analyse Rapide :\n- Explorez les avis 2 et 3 étoiles des meilleures ventes dans votre niche pour identifier les manques non comblés.\n- Cartographiez les questions récurrentes sur les communautés et forums spécialisés.\n- Formalisez votre promesse centrale en une seule phrase active.`,
         keyTakeaways: [
           'Formuler une promesse de transformation claire',
@@ -40,6 +42,8 @@ export const INITIAL_TRAINING_COURSES: TrainingCourse[] = [
         title: 'Chapitre 2 : Rédiger avec l\'assistance IA sans perdre sa voix d\'auteur',
         duration: '32 pages',
         completed: true,
+        illustrationUrl: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80',
+        illustrationCaption: 'Figure 2.1 : Harmonie entre intuition humaine et assistance générative.',
         content: `## 2.1 Le Prompting Stratégique pour Auteurs\n\nL'intelligence artificielle n'est pas un substitut à votre pensée, mais un co-auteur infatigable pour débloquer le syndrome de la page blanche.\n\n### Le Protocole en 4 Étapes :\n1. **Le Cadrage Contextuel** : Définissez précisément le ton, le public cible et le niveau de vocabulaire souhaité.\n2. **L'Approfondissement Étape par Étape** : Ne demandez jamais "écris-moi un chapitre entier", mais structurez vos sous-parties une par une.\n3. **La Réinjection Humaine** : Intégrez vos anecdotes vécues, vos exemples concrets et vos métaphores personnelles.\n4. **Le Polissage Stylistique** : Supprimez les adverbes superflus et les tournures génériques.`,
         keyTakeaways: [
           'Guider l\'IA avec un persona et un style rigoureux',

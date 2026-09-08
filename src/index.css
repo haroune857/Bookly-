@@ -228,6 +228,29 @@
   letter-spacing: 0.35em;
 }
 
+/* Drop-cap for first letter of chapter opener */
+.first-page-dropcap p.book-p:first-of-type::first-letter,
+.first-page-dropcap > p:first-of-type::first-letter {
+  float: left;
+  font-family: Georgia, 'Cinzel', serif;
+  font-size: 3.4rem;
+  line-height: 0.82;
+  padding-top: 4px;
+  padding-right: 8px;
+  padding-bottom: 2px;
+  font-weight: 900;
+  color: #4f46e5;
+}
+:is(.dark .first-page-dropcap p.book-p:first-of-type::first-letter),
+:is(.dark .first-page-dropcap > p:first-of-type::first-letter) {
+  color: #818cf8;
+}
+
+.book-page-content {
+  hyphens: auto;
+  text-rendering: optimizeLegibility;
+}
+
 /* ==========================================================================
    BOOKLY SLIDING AUTH PANELS (Double-panel sliding authentication system)
    ========================================================================== */

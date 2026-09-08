@@ -78,6 +78,7 @@ export default function App() {
   // Subscription Modal State
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [targetUpgradePlan, setTargetUpgradePlan] = useState<'pro' | 'premium'>('pro');
+  const [targetUpgradeCycle, setTargetUpgradeCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
 
   // Admin Authentication State
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
@@ -485,8 +486,12 @@ export default function App() {
     showToast('Déconnexion réussie', 'Vous êtes sur la vitrine publique Bookly. À bientôt !', 'info');
   };
 
-  const handleOpenSubscriptionModal = (plan: 'pro' | 'premium' = 'pro') => {
+  const handleOpenSubscriptionModal = (
+    plan: 'pro' | 'premium' = 'pro',
+    cycle: 'monthly' | 'quarterly' | 'yearly' = 'monthly'
+  ) => {
     setTargetUpgradePlan(plan);
+    setTargetUpgradeCycle(cycle);
     setIsSubscriptionModalOpen(true);
   };
 
@@ -973,6 +978,7 @@ export default function App() {
           isOpen={isSubscriptionModalOpen}
           onClose={() => setIsSubscriptionModalOpen(false)}
           initialPlan={targetUpgradePlan}
+          initialCycle={targetUpgradeCycle}
           user={user}
           onUpgradeSuccess={handleUpgradeSuccess}
           onShowToast={showToast}
@@ -1002,6 +1008,8 @@ export default function App() {
           onOpenReader={(p) => setReaderItem(p)}
           onOpenExport={(p) => setExportItem(p)}
           onShowToast={showToast}
+          user={user}
+          onOpenPricing={(plan, cycle) => handleOpenSubscriptionModal(plan, cycle)}
         />
       )}
 

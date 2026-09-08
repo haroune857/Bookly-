@@ -2,15 +2,22 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
+import {
+  getEffectiveGroqKey,
+  getEffectiveGeminiKey,
+  getEffectiveOpenRouterKey,
+  getEffectiveSaspayKey
+} from './constants/apiKeys';
+import { getThematicFallbackIllustration } from './data/thematicIllustrations';
 
 export function createApiRouter(): Router {
   const router = Router();
 
-  // Initialize Groq client dynamically from process.env
+  // Initialize Groq client dynamically from process.env with built-in resilient fallback
   let groq: Groq | null = null;
   let lastGroqKey: string | undefined = undefined;
   function getGroq() {
-    const key = process.env.GROQ_API_KEY;
+    const key = getEffectiveGroqKey();
     if (!key) return null;
     if (!groq || lastGroqKey !== key) {
       groq = new Groq({ apiKey: key.trim() });
@@ -19,11 +26,11 @@ export function createApiRouter(): Router {
     return groq;
   }
 
-  // Initialize Gemini dynamically from process.env
+  // Initialize Gemini dynamically from process.env with built-in resilient fallback
   let genAI: GoogleGenAI | null = null;
   let lastGeminiKey: string | undefined = undefined;
   function getGenAI() {
-    const key = process.env.GEMINI_API_KEY;
+    const key = getEffectiveGeminiKey();
     if (!key) return null;
     if (!genAI || lastGeminiKey !== key) {
       genAI = new GoogleGenAI({ apiKey: key.trim() });
@@ -240,9 +247,9 @@ export function createApiRouter(): Router {
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     options: { model?: string; jsonMode?: boolean; maxTokens?: number; temperature?: number } = {}
   ): Promise<{ text: string; modelUsed: string }> {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = getEffectiveOpenRouterKey();
     if (!apiKey) {
-      throw new Error('Clé API OpenRouter non configurée dans les variables d\'environnement');
+      throw new Error('Clé API OpenRouter non configurée');
     }
 
     const candidateModels = options.model
@@ -302,10 +309,10 @@ export function createApiRouter(): Router {
   router.get('/health', (req, res) => {
     res.json({
       status: 'ok',
-      hasGroqKey: Boolean(process.env.GROQ_API_KEY),
-      hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
-      hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY),
-      hasSaspayKey: Boolean(process.env.SASPAY_API_KEY),
+      hasGroqKey: Boolean(getEffectiveGroqKey()),
+      hasGeminiKey: Boolean(getEffectiveGeminiKey()),
+      hasOpenRouterKey: Boolean(getEffectiveOpenRouterKey()),
+      hasSaspayKey: Boolean(getEffectiveSaspayKey()),
       groqModels: GROQ_CHAT_MODELS,
       geminiModels: GEMINI_MODELS,
       openRouterModels: OPENROUTER_MODELS,
@@ -715,6 +722,89 @@ Prenez une feuille ou ouvrez votre carnet de notes et notez les 3 décisions cl�
     }
   });
 
+  // Dedicated Chapter Illustration Generator (AI-Powered with Gemini Image Models & Curated Editorial Fallback)
+  router.post('/ai/chapter-illustration', async (req, res) => {
+    try {
+      const { bookTitle, chapterTitle, chapterNumber = 1, category, chapterSummary, style = 'editorial' } = req.body;
+      if (!chapterTitle) {
+        return res.status(400).json({ error: 'Titre de chapitre requis' });
+      }
+
+      const styleDescription =
+        style === 'watercolor'
+          ? 'delicate watercolor washes, soft elegant paper texture, artistic refinement'
+          : style === 'cinematic'
+          ? 'cinematic wide angle, atmospheric lighting, volumetric depth, rich palette'
+          : style === 'minimalist'
+          ? 'clean minimalist vector art, architectural line work, refined negative space'
+          : 'award-winning editorial fine art, modern architectural composition, sophisticated lighting, museum quality';
+
+      const prompt = `A breathtaking, high-definition editorial book chapter illustration for the book "${bookTitle || 'Guide Pratique'}", Chapter ${chapterNumber}: "${chapterTitle}".
+Theme & Subject: ${chapterSummary || chapterTitle}.
+Category: ${category || 'Général'}.
+Artistic Style: ${styleDescription}.
+Strictly NO text, NO labels, NO typography in the image. Pure visual artwork. Aspect ratio 16:9.`;
+
+      // 1. Try Gemini Image Generation via @google/genai SDK
+      const gemini = getGenAI();
+      if (gemini) {
+        const imageModels = ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image'];
+        for (const model of imageModels) {
+          try {
+            console.log(`Generating chapter illustration with Gemini model: ${model}...`);
+            const response = await gemini.models.generateContent({
+              model,
+              contents: {
+                parts: [{ text: prompt }]
+              },
+              config: {
+                imageConfig: {
+                  aspectRatio: '16:9'
+                }
+              }
+            });
+
+            if (response.candidates && response.candidates[0]?.content?.parts) {
+              for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                  const mime = part.inlineData.mimeType || 'image/png';
+                  const imageUrl = `data:${mime};base64,${part.inlineData.data}`;
+                  return res.json({
+                    success: true,
+                    imageUrl,
+                    caption: `Figure ${chapterNumber} : Illustration originale de chapitre — ${chapterTitle}`,
+                    source: `gemini (${model})`,
+                    promptUsed: prompt
+                  });
+                }
+              }
+            }
+          } catch (gemImgErr: any) {
+            console.warn(`Gemini image model ${model} failed:`, gemImgErr?.message || gemImgErr);
+          }
+        }
+      }
+
+      // 2. Curated Editorial Thematic Fallback matched to the book theme & chapter
+      const curated = getThematicFallbackIllustration({
+        category,
+        chapterTitle,
+        chapterNumber
+      });
+
+      return res.json({
+        success: true,
+        imageUrl: curated.imageUrl,
+        caption: `Figure ${chapterNumber} : ${curated.caption.replace(/^Figure \d+ : /, '')} — ${chapterTitle}`,
+        source: 'thematic_curated',
+        promptUsed: prompt
+      });
+    } catch (err: any) {
+      console.error('Chapter illustration route error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // OpenRouter Direct Proxy
   router.post('/ai/openrouter', async (req, res) => {
     try {
@@ -954,7 +1044,7 @@ Recommande la meilleure couverture.`;
   // =========================================================================
   // SASPAY PAYMENT GATEWAY INTEGRATION
   // =========================================================================
-  const getSaspayKey = () => (process.env.SASPAY_API_KEY || '').trim();
+  const getSaspayKey = () => getEffectiveSaspayKey();
   const SASPAY_BASE_URL = 'https://api.saspay.me/api/v1';
 
   const PLAN_PRICES: Record<string, Record<string, number>> = {
